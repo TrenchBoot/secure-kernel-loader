@@ -1,4 +1,4 @@
-SLB_FILE=${SLB_FILE:=lz_header.bin}
+SLB_FILE=${SLB_FILE:=skl_header.bin}
 
 SL_SIZE=`hexdump "$SLB_FILE" -s2 -n2 -e '/2 "%u"'`
 
@@ -16,11 +16,11 @@ sha256_kernel () {
 	dd if="$1" bs=1 skip=$KERNEL_PROT_SKIP 2>/dev/null | sha256sum | grep -o "^[a-fA-F0-9]*"
 }
 
-sha1_lz () {
+sha1_skl () {
 	dd if="$SLB_FILE" bs=1 count=$SL_SIZE 2>/dev/null | sha1sum | grep -o "^[a-fA-F0-9]*"
 }
 
-sha256_lz () {
+sha256_skl () {
 	dd if="$SLB_FILE" bs=1 count=$SL_SIZE 2>/dev/null | sha256sum | grep -o "^[a-fA-F0-9]*"
 }
 

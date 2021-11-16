@@ -41,20 +41,20 @@ SRC := $(filter-out test-%,$(ALL_SRC))
 OBJ := $(ASM:.S=.o) $(SRC:.c=.o)
 
 .PHONY: all
-all: lz_header.bin
+all: skl_header.bin
 
 -include Makefile.local
 
 # Generate a flat binary
 #
-# As a sanity check, look for the LZ UUID at its expected offset in the binary
+# As a sanity check, look for the SKL UUID at its expected offset in the binary
 # image.  One reason this might fail is if the linker decides to put an
 # unreferenced section ahead of .text, in which case link.lds needs adjusting.
-lz_header.bin: lz_header Makefile
+skl_header.bin: skl_header Makefile
 	objcopy -O binary -S $< $@
 	@./sanity_check.sh
 
-lz_header: link.lds $(OBJ) Makefile
+skl_header: link.lds $(OBJ) Makefile
 	$(CC) -Wl,-T,link.lds $(LDFLAGS) $(OBJ) -o $@
 
 tpmlib/%.o: tpmlib/%.c Makefile
@@ -92,7 +92,7 @@ cscope:
 
 .PHONY: clean
 clean:
-	rm -f lz_header.bin lz_header $(TESTS) *.d *.o *.gcov *.gcda *.gcno tpmlib/*.d tpmlib/*.o cscope.*
+	rm -f skl_header.bin skl_header $(TESTS) *.d *.o *.gcov *.gcda *.gcno tpmlib/*.d tpmlib/*.o cscope.*
 
 # Compiler-generated header dependencies.  Should be last.
 -include $(OBJ:.o=.d) $(TESTS:=.d)
