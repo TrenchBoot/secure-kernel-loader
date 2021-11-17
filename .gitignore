@@ -1,5 +1,5 @@
-lz_header.bin
-lz_header
+skl_header.bin
+skl_header
 *.d
 *.o
 *.gcda
