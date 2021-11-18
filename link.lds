@@ -1,7 +1,7 @@
 /*
- * lz_header.lds
+ * link.lds
  *
- * Linker script for the i386 LZ setup code
+ * Linker script for the i386 SKL setup code
  *
  * Copyright (c) 2019 Oracle and/or its affiliates. All rights reserved.
  *
@@ -49,8 +49,8 @@ SECTIONS
 		*(.page_data)
 	}
 
-	.lz_info : {
-		*(.lz_info)
+	.skl_info : {
+		*(.skl_info)
 	}
 
 	. = ALIGN(8);

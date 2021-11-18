@@ -201,19 +201,19 @@ int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event)
 int event_log_init(struct tpm *tpm)
 {
 	unsigned int min_size;
-	struct lz_tag_evtlog *t = next_of_type(&bootloader_data, LZ_TAG_EVENT_LOG);
+	struct skl_tag_evtlog *t = next_of_type(&bootloader_data, SKL_TAG_EVENT_LOG);
 
-	if (t == NULL || next_of_type(t, LZ_TAG_EVENT_LOG) != NULL)
+	if (t == NULL || next_of_type(t, SKL_TAG_EVENT_LOG) != NULL)
 		goto err;
 
 	min_size = sizeof (tpm12_event_t);
 
 	if (tpm->family == TPM12) {
 		min_size += sizeof(tpm12_id_struct);
-		min_size += 2 * sizeof(tpm12_event_t); /* LZ and kernel hashes */
+		min_size += 2 * sizeof(tpm12_event_t); /* SKL and kernel hashes */
 	} else if (tpm->family == TPM20) {
 		min_size += sizeof(tpm20_id_struct);
-		min_size += 2 * sizeof(tpm20_event_t); /* LZ and kernel hashes */
+		min_size += 2 * sizeof(tpm20_event_t); /* SKL and kernel hashes */
 	} else {
 		goto err;
 	}
@@ -230,8 +230,8 @@ int event_log_init(struct tpm *tpm)
 		goto err;
 
 	/*
-	 * Bootloader controls location and size, so it could force LZ to overwrite
-	 * its code **after** it was measured. Make sure that the Event Log and LZ
+	 * Bootloader controls location and size, so it could force SKL to overwrite
+	 * its code **after** it was measured. Make sure that the Event Log and SKL
 	 * do not overlap before wiping the memory.
 	 */
 	if (!(_p(limit) < _p(_start) || _p(_start + SLB_SIZE) < _p(ptr_current)))
@@ -268,19 +268,19 @@ int event_log_init(struct tpm *tpm)
 
 	/* Log what was done by SKINIT */
 	if (tpm->family == TPM12) {
-		struct lz_tag_hash *h = next_of_type(&bootloader_data, LZ_TAG_LZ_HASH);
+		struct skl_tag_hash *h = next_of_type(&bootloader_data, SKL_TAG_SKL_HASH);
 
 		while (h != NULL) {
 			if (h->algo_id == TPM_ALG_SHA1)
 				return log_event_tpm12(17, h->digest, "SKINIT");
 
-			h = next_of_type(h, LZ_TAG_LZ_HASH);
+			h = next_of_type(h, SKL_TAG_SKL_HASH);
 		}
 
 		/* No SHA1 hash was passed by a bootloader? */
 		return 1;
 	} else {
-		struct lz_tag_hash *h = next_of_type(&bootloader_data, LZ_TAG_LZ_HASH);
+		struct skl_tag_hash *h = next_of_type(&bootloader_data, SKL_TAG_SKL_HASH);
 		u8 *sha1 = NULL;
 		u8 *sha256 = NULL;
 
@@ -294,7 +294,7 @@ int event_log_init(struct tpm *tpm)
 			if (sha1 != NULL && sha256 != NULL)
 				return log_event_tpm20(17, sha1, sha256, "SKINIT");
 
-			h = next_of_type(h, LZ_TAG_LZ_HASH);
+			h = next_of_type(h, SKL_TAG_SKL_HASH);
 		}
 
 		/* Either SHA1 or SHA256 hash wasn't passed by a bootloader? */
