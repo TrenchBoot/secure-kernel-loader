@@ -32,7 +32,7 @@
 
 u32 boot_protocol;
 
-lz_info_t __section(".lz_info") __used lz_info = {
+skl_info_t __section(".skl_info") __used skl_info = {
 	.uuid = {
 		0x78, 0xf1, 0x26, 0x8e, 0x04, 0x92, 0x11, 0xe9,
 		0x83, 0x2a, 0xc8, 0x5b, 0x76, 0xc4, 0xcc, 0x02,
@@ -384,7 +384,7 @@ typedef struct {
 	void *zero_page;       /* %edx */
 } asm_return_t;
 
-static asm_return_t lz_linux(struct tpm *tpm, struct lz_tag_boot_linux *lz_tag)
+static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_tag)
 {
 	struct boot_params *bp;
 	struct kernel_info *ki;
@@ -392,7 +392,7 @@ static asm_return_t lz_linux(struct tpm *tpm, struct lz_tag_boot_linux *lz_tag)
 	void *pm_kernel_entry;
 
 	/* The Zero Page with the boot_params and legacy header */
-	bp = _p(lz_tag->zero_page);
+	bp = _p(skl_tag->zero_page);
 
 	/* Disable memory protection and setup IOMMU */
 	iommu_setup();
@@ -434,7 +434,7 @@ static asm_return_t lz_linux(struct tpm *tpm, struct lz_tag_boot_linux *lz_tag)
 	hexdump(pm_kernel_entry, 0x100);
 	print("zero_page:\n");
 	hexdump(bp, 0x280);
-	print("lz_base:\n");
+	print("skl_base:\n");
 	hexdump(_start, 0x100);
 	print("device_table:\n");
 	hexdump(device_table, 0x100);
@@ -443,12 +443,12 @@ static asm_return_t lz_linux(struct tpm *tpm, struct lz_tag_boot_linux *lz_tag)
 	print("event_log:\n");
 	hexdump(event_log, 0x1000);
 
-	print("lz_main() is about to exit\n");
+	print("skl_main() is about to exit\n");
 
 	return (asm_return_t){ pm_kernel_entry, bp };
 }
 
-static asm_return_t lz_multiboot2(struct tpm *tpm, struct lz_tag_boot_mb2 *lz_tag)
+static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl_tag)
 {
 	void *kernel_entry;
 	u32 kernel_size, mbi_len;
@@ -457,12 +457,12 @@ static asm_return_t lz_multiboot2(struct tpm *tpm, struct lz_tag_boot_mb2 *lz_ta
 
 	/* This is MBI header, not a tag, but their structures are similar enough.
 	 * Note that 'size' offsets are reversed in those two! */
-	tag = _p(lz_tag->mbi);
+	tag = _p(skl_tag->mbi);
 
-	/* lz_tag->kernel_size is either passed size of kernel from bootloader
+	/* skl_tag->kernel_size is either passed size of kernel from bootloader
 	 * or 0 */
-	kernel_size = lz_tag->kernel_size;
-	kernel_entry = _p(lz_tag->kernel_entry);
+	kernel_size = skl_tag->kernel_size;
+	kernel_entry = _p(skl_tag->kernel_entry);
 
 	/* Disable memory protection and setup IOMMU */
 	iommu_setup();
@@ -514,7 +514,7 @@ static asm_return_t lz_multiboot2(struct tpm *tpm, struct lz_tag_boot_mb2 *lz_ta
 	extend_pcr(tpm, kernel_entry, kernel_size, 17,
 	           "Measured Kernel into PCR17");
 
-	tag = _p(lz_tag->mbi);
+	tag = _p(skl_tag->mbi);
 	tag++;
 
 	while (tag->type) {
@@ -535,35 +535,35 @@ static asm_return_t lz_multiboot2(struct tpm *tpm, struct lz_tag_boot_mb2 *lz_ta
 
 	/* Safety checks */
 	if (tag->size != 8
-	    || _p(multiboot_next_tag(tag)) > _p(lz_tag->mbi) + mbi_len) {
+	    || _p(multiboot_next_tag(tag)) > _p(skl_tag->mbi) + mbi_len) {
 		print("MBI safety checks failed\n");
 		reboot();
 	}
 
 	boot_protocol = MULTIBOOT2;
 
-	return (asm_return_t){ kernel_entry, _p(lz_tag->mbi) };
+	return (asm_return_t){ kernel_entry, _p(skl_tag->mbi) };
 }
 
-asm_return_t lz_main(void)
+asm_return_t skl_main(void)
 {
 	asm_return_t ret;
 	struct tpm *tpm;
-	struct lz_tag_hdr *t = (struct lz_tag_hdr*) &bootloader_data;
+	struct skl_tag_hdr *t = (struct skl_tag_hdr*) &bootloader_data;
 
 	/*
 	 * Now in 64b mode, paging is setup. This is the launching point. We can
 	 * now do what we want. First order of business is to setup
-	 * DEV to cover memory from the start of bzImage to the end of the LZ
+	 * DEV to cover memory from the start of bzImage to the end of the SKL
 	 * "kernel". At the end, trampoline to the PM entry point which will
 	 * include the Secure Launch stub.
 	 */
 	pci_init();
 
-	if (t->type                              != LZ_TAG_TAGS_SIZE
-	    || t->len                            != sizeof(struct lz_tag_tags_size)
+	if (t->type                              != SKL_TAG_TAGS_SIZE
+	    || t->len                            != sizeof(struct skl_tag_tags_size)
 	    || end_of_tags()                      > _p(_start + SLB_SIZE)
-	    || (t = next_of_type(t, LZ_TAG_END)) == NULL
+	    || (t = next_of_type(t, SKL_TAG_END)) == NULL
 	    || _p(t) + t->len                    != end_of_tags()) {
 		print("Bad bootloader data format\n");
 		reboot();
@@ -582,18 +582,18 @@ asm_return_t lz_main(void)
 	extend_pcr(tpm, &bootloader_data, bootloader_data.size, 18,
 	           "Measured bootloader data into PCR18");
 
-	t = next_of_class(&bootloader_data, LZ_TAG_BOOT_CLASS);
-	if (t == NULL || next_of_class(t, LZ_TAG_BOOT_CLASS) != NULL) {
+	t = next_of_class(&bootloader_data, SKL_TAG_BOOT_CLASS);
+	if (t == NULL || next_of_class(t, SKL_TAG_BOOT_CLASS) != NULL) {
 		print("No boot tag or multiple boot tags\n");
 		reboot();
 	}
 
 	switch(t->type) {
-		case LZ_TAG_BOOT_LINUX:
-			ret = lz_linux(tpm, (struct lz_tag_boot_linux *)t);
+		case SKL_TAG_BOOT_LINUX:
+			ret = skl_linux(tpm, (struct skl_tag_boot_linux *)t);
 			break;
-		case LZ_TAG_BOOT_MB2:
-			ret = lz_multiboot2(tpm, (struct lz_tag_boot_mb2 *)t);
+		case SKL_TAG_BOOT_MB2:
+			ret = skl_multiboot2(tpm, (struct skl_tag_boot_mb2 *)t);
 			break;
 		default:
 			print("Unknown kernel boot protocol\n");
@@ -608,24 +608,24 @@ asm_return_t lz_main(void)
 	hexdump(ret.pm_kernel_entry, 0x100);
 	print("zero_page:\n");
 	hexdump(ret.zero_page, 0x280);
-	print("lz_base:\n");
+	print("skl_base:\n");
 	hexdump(_start, 0x100);
 	print("bootloader_data:\n");
 	hexdump(&bootloader_data, bootloader_data.size);
 
-	t = next_of_type(&bootloader_data, LZ_TAG_EVENT_LOG);
+	t = next_of_type(&bootloader_data, SKL_TAG_EVENT_LOG);
 	if (t != NULL) {
 		print("TPM event log:\n");
-		hexdump(_p(((struct lz_tag_evtlog *)t)->address),
-		        ((struct lz_tag_evtlog *)t)->size);
+		hexdump(_p(((struct skl_tag_evtlog *)t)->address),
+		        ((struct skl_tag_evtlog *)t)->size);
 	}
 
-	if (lz_stack_canary != STACK_CANARY) {
+	if (skl_stack_canary != STACK_CANARY) {
 		print("Stack is too small, possible corruption\n");
 		reboot();
 	}
 
-	print("lz_main() is about to exit\n");
+	print("skl_main() is about to exit\n");
 
 	return ret;
 }

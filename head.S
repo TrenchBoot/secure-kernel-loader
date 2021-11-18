@@ -32,19 +32,19 @@
 	.section .headers, "ax", @progbits
 
 GLOBAL(sl_header)
-	.word	_entry           /* SL header LZ offset to code start */
-	.word	bootloader_data  /* SL header LZ measured length */
-	.word	lz_info
+	.word	_entry           /* SL header SKL offset to code start */
+	.word	bootloader_data  /* SL header SKL measured length */
+	.word	skl_info
 ENDDATA(sl_header)
 
-GLOBAL(lz_stack_canary)
+GLOBAL(skl_stack_canary)
 	.long STACK_CANARY
-ENDDATA(lz_stack_canary)
-lz_stack:
+ENDDATA(skl_stack_canary)
+skl_stack:
 	.fill 0x280, 1, 0xcc   /* Enough space for now */
 	.align 0x10, 0         /* Ensure proper alignment for 64bit */
 .L_stack_base:
-ENDDATA(lz_stack)
+ENDDATA(skl_stack)
 
 	.text
 	.code32
@@ -52,7 +52,7 @@ ENDDATA(lz_stack)
 GLOBAL(_entry)
 	/*
 	 * Per the spec:
-	 * %eax	   - Beginning of LZ containing the SL header
+	 * %eax	   - Beginning of SKL containing the SL header
 	 * %edx	   - Family/Model/Stepping
 	 * %esp	   - %eax + 64k (End of SLB)
 	 * %cs	   - 32bit Flat, selector 0x08
@@ -134,10 +134,10 @@ GLOBAL(_entry)
 1:
 #endif	/* 64bit setup. */
 
-	call	lz_main
+	call	skl_main
 
 	/*
-	 * lz_main() is magic.  It returns two pointers by register:
+	 * skl_main() is magic.  It returns two pointers by register:
 	 *
 	 * %eax - protected mode kernel entry
 	 * %edx - ZP base
@@ -183,7 +183,7 @@ GLOBAL(_entry)
 	cmpl	$MULTIBOOT2, boot_protocol(%ebp)
 	je	multiboot2_kernel
 
-	/* Jump to entry target - EBX: startup_32, ESI: ZP base, EDX: LZ base */
+	/* Jump to entry target - EBX: startup_32, ESI: ZP base, EDX: SKL base */
 	mov	%ebp, %edx
 	jmp	*%ebx
 

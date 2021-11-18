@@ -40,22 +40,22 @@
 #define __BOOT_H__
 
 extern const char _start[];
-extern volatile u32 lz_stack_canary;
+extern volatile u32 skl_stack_canary;
 
 typedef struct __packed sl_header {
-	u16 lz_entry_point;
+	u16 skl_entry_point;
 	u16 bootloader_data_offset;
-	u16 lz_info_offset;
+	u16 skl_info_offset;
 } sl_header_t;
 extern sl_header_t sl_header;
 
-typedef struct __packed lz_info {
+typedef struct __packed skl_info {
 	u8  uuid[16]; /* 78 f1 26 8e 04 92 11 e9  83 2a c8 5b 76 c4 cc 02 */
 	u32 version;
 	u16 msb_key_algo;
 	u8  msb_key_hash[64]; /* Support up to SHA512 */
-} lz_info_t;
-extern lz_info_t lz_info;
+} skl_info_t;
+extern skl_info_t skl_info;
 
 /* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
 typedef struct __packed ev_log_hash {
