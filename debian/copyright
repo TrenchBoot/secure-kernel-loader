@@ -1,6 +1,6 @@
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
-Upstream-Name: landing-zone
-Source: https://github.com/TrenchBoot/landing-zone
+Upstream-Name: secure-kernel-loader
+Source: https://github.com/TrenchBoot/secure-kernel-loader
 
 Files: *
 Copyright: 2021	Daniel P. Smith <dpsmith@apertussolutions.com>
