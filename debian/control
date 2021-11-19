@@ -1,13 +1,13 @@
-Source: landing-zone
+Source: secure-kernel-loader
 Section: main/embedded
 Priority: optional
 Maintainer: debian <debian@3mdeb.com>
 Build-Depends: debhelper (>= 10)
 Standards-Version: 4.1.2
 Homepage: https://github.com/trenchboot
-Vcs-Git: https://github.com/TrenchBoot/landing-zone
+Vcs-Git: https://github.com/TrenchBoot/secure-kernel-loader
 
-Package: landing-zone
+Package: secure-kernel-loader
 Architecture: amd64
 Depends: ${shlibs:Depends}, ${misc:Depends}
 Description: Open source implementation of Secure Loader for AMD Secure Startup.
