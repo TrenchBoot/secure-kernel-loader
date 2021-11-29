@@ -1,5 +1,5 @@
-skl_header.bin
-skl_header
+skl.bin
+skl
 *.d
 *.o
 *.gcda

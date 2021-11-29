@@ -1,4 +1,4 @@
-SLB_FILE=${SLB_FILE:=skl_header.bin}
+SLB_FILE=${SLB_FILE:=skl.bin}
 
 SL_SIZE=`hexdump "$SLB_FILE" -s2 -n2 -e '/2 "%u"'`
 

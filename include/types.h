@@ -42,7 +42,7 @@ typedef  int64_t s64;
 
 #else
 /*
- * If we are freestanding (i.e. building skl_header itself), there is no
+ * If we are freestanding (i.e. building skl.bin itself), there is no
  * environment for us to rely on.
  */
 

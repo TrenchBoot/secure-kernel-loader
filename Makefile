@@ -41,7 +41,7 @@ SRC := $(filter-out test-%,$(ALL_SRC))
 OBJ := $(ASM:.S=.o) $(SRC:.c=.o)
 
 .PHONY: all
-all: skl_header.bin
+all: skl.bin
 
 -include Makefile.local
 
@@ -50,11 +50,11 @@ all: skl_header.bin
 # As a sanity check, look for the SKL UUID at its expected offset in the binary
 # image.  One reason this might fail is if the linker decides to put an
 # unreferenced section ahead of .text, in which case link.lds needs adjusting.
-skl_header.bin: skl_header Makefile
+skl.bin: skl Makefile
 	objcopy -O binary -S $< $@
 	@./sanity_check.sh
 
-skl_header: link.lds $(OBJ) Makefile
+skl: link.lds $(OBJ) Makefile
 	$(CC) -Wl,-T,link.lds $(LDFLAGS) $(OBJ) -o $@
 
 tpmlib/%.o: tpmlib/%.c Makefile
@@ -92,7 +92,7 @@ cscope:
 
 .PHONY: clean
 clean:
-	rm -f skl_header.bin skl_header $(TESTS) *.d *.o *.gcov *.gcda *.gcno tpmlib/*.d tpmlib/*.o cscope.*
+	rm -f skl.bin skl $(TESTS) *.d *.o *.gcov *.gcda *.gcno tpmlib/*.d tpmlib/*.o cscope.*
 
 # Compiler-generated header dependencies.  Should be last.
 -include $(OBJ:.o=.d) $(TESTS:=.d)
