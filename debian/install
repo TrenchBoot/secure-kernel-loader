@@ -1,3 +1,3 @@
-./skl_header.bin /boot/
+./skl.bin /boot/
 ./util.sh /usr/share/doc/secure-kernel-loader/scripts
 ./extend_all.sh /usr/share/doc/secure-kernel-loader/scripts
