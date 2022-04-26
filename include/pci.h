@@ -47,6 +47,8 @@
 #define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
 #define PCI_FUNC(devfn)         ((devfn) & 0x07)
 
+#define INVALID_CAP(c) 		((c == 0) || (c == 0xFFFFFFFF) || (c == 0xFF))
+
 
 /* From arch/x86/pci/direct.c definitions */
 
@@ -56,6 +58,8 @@ extern int (*pci_read)(unsigned int seg, unsigned int bus,
 
 extern int (*pci_write)(unsigned int seg, unsigned int bus,
                         unsigned int devfn, int reg, int len, u32 value);
+
+u32 pci_locate(unsigned int bus, unsigned int devfn);
 
 void pci_init(void);
 

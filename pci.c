@@ -158,6 +158,41 @@ static int pci_mmio_write(unsigned int seg, unsigned int bus,
 	return 0;
 }
 
+u32 pci_locate(unsigned int bus, unsigned int devfn)
+{
+	u32 pci_cap_ptr;
+	u32 next;
+
+	/* Read capabilities pointer */
+	pci_read(0, bus,
+	         devfn,
+	         PCI_CAPABILITY_LIST,
+	         4, &pci_cap_ptr);
+
+	if (INVALID_CAP(pci_cap_ptr))
+		return 0;
+
+	pci_cap_ptr &= 0xFF;
+
+	while (pci_cap_ptr != 0)
+	{
+		pci_read(0, bus,
+		         devfn,
+		         pci_cap_ptr,
+		         4, &next);
+
+		if (PCI_CAP_ID(next) == PCI_CAPABILITIES_POINTER_ID_DEV)
+			break;
+
+		pci_cap_ptr = PCI_CAP_PTR(next);
+	}
+
+	if (INVALID_CAP(pci_cap_ptr))
+		return 0;
+
+	return pci_cap_ptr;
+}
+
 void pci_init(void)
 {
 	u32 eax, edx;

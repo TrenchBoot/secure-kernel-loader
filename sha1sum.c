@@ -27,6 +27,7 @@
 #include <types.h>
 #include <errno-base.h>
 #include <sha1sum.h>
+#include <string.h>
 
 static inline u32
 rol( u32 x, int n)

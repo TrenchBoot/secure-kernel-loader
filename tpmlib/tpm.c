@@ -20,6 +20,8 @@
 
 #endif
 
+#include <string.h>
+
 #include "tpm.h"
 #include "tpmbuff.h"
 #include "tis.h"

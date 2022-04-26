@@ -24,6 +24,8 @@
 
 #endif
 
+#include <string.h>
+
 #include "tpm.h"
 #include "tpmbuff.h"
 #include "tpm2.h"

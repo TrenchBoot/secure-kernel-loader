@@ -19,6 +19,7 @@
 #include <types.h>
 #include <pci.h>
 #include <iommu.h>
+#include <printk.h>
 
 iommu_dte_t device_table[2 * PAGE_SIZE / sizeof(iommu_dte_t)] __page_data = {
 	[0 ... ARRAY_SIZE(device_table) - 1 ] = {
@@ -28,153 +29,10 @@ iommu_dte_t device_table[2 * PAGE_SIZE / sizeof(iommu_dte_t)] __page_data = {
 iommu_command_t command_buf[2] __aligned(sizeof(iommu_command_t));
 char event_log[PAGE_SIZE] __page_data;
 
-#ifdef DEBUG
-static void print_char(char c)
-{
-	while ( !(inb(0x3f8 + 5) & 0x20) )
-		;
-
-	outb(c, 0x3f8);
-}
-
-static void print(char * txt) {
-	while (*txt != '\0') {
-		if (*txt == '\n')
-			print_char('\r');
-		print_char(*txt++);
-	}
-}
-
-static void print_u64(u64 p) {
-	char tmp[sizeof(void*)*2 + 5] = "0x";
-	int i;
-
-	for (i=0; i<sizeof(void*); i++) {
-		if ((p & 0xf) >= 10)
-			tmp[sizeof(void*)*2 + 1 - 2*i] = (p & 0xf) + 'a' - 10;
-		else
-			tmp[sizeof(void*)*2 + 1 - 2*i] = (p & 0xf) + '0';
-		p >>= 4;
-		if ((p & 0xf) >= 10)
-			tmp[sizeof(void*)*2 - 2*i] = (p & 0xf) + 'a' - 10;
-		else
-			tmp[sizeof(void*)*2 - 2*i] = (p & 0xf) + '0';
-		p >>= 4;
-	}
-	tmp[sizeof(void*)*2 + 2] = ':';
-	tmp[sizeof(void*)*2 + 3] = ' ';
-	tmp[sizeof(void*)*2 + 4] = '\0';
-	print(tmp);
-}
-#else
-static void print(const char * unused) { }
-static void print_u64(u64 unused) { }
-#endif
-
-
-static u32 _locate(unsigned int bus, unsigned int devfn)
-{
-	u32 pci_cap_ptr;
-	u32 next;
-
-	/* Read capabilities pointer */
-	pci_read(0, bus,
-	         devfn,
-	         PCI_CAPABILITY_LIST,
-	         4, &pci_cap_ptr);
-
-	if (INVALID_CAP(pci_cap_ptr))
-		return 0;
-
-	pci_cap_ptr &= 0xFF;
-
-	while (pci_cap_ptr != 0)
-	{
-		pci_read(0, bus,
-		         devfn,
-		         pci_cap_ptr,
-		         4, &next);
-
-		if (PCI_CAP_ID(next) == PCI_CAPABILITIES_POINTER_ID_DEV)
-			break;
-
-		pci_cap_ptr = PCI_CAP_PTR(next);
-	}
-
-	if (INVALID_CAP(pci_cap_ptr))
-		return 0;
-
-	return pci_cap_ptr;
-}
-
 u32 iommu_locate(void)
 {
-	return _locate(IOMMU_PCI_BUS,
-	               PCI_DEVFN(IOMMU_PCI_DEVICE, IOMMU_PCI_FUNCTION));
-}
-
-static u32 dev_locate(void)
-{
-	return _locate(DEV_PCI_BUS,
-	               PCI_DEVFN(DEV_PCI_DEVICE, DEV_PCI_FUNCTION));
-}
-
-static inline u32 dev_read(u32 dev_cap, u32 function, u32 index)
-{
-        u32 value;
-
-        pci_write(0, DEV_PCI_BUS,
-			PCI_DEVFN(DEV_PCI_DEVICE,DEV_PCI_FUNCTION),
-			dev_cap + DEV_OP_OFFSET,
-			4,
-			(u32)(((function & 0xff) << 8) + (index & 0xff)) );
-
-        pci_read(0, DEV_PCI_BUS,
-			PCI_DEVFN(DEV_PCI_DEVICE,DEV_PCI_FUNCTION),
-			dev_cap + DEV_DATA_OFFSET,
-			4, &value);
-
-	return value;
-}
-
-static inline void dev_write(u32 dev_cap, u32 function, u32 index, u32 value)
-{
-        pci_write(0, DEV_PCI_BUS,
-			PCI_DEVFN(DEV_PCI_DEVICE,DEV_PCI_FUNCTION),
-			dev_cap + DEV_OP_OFFSET,
-			4,
-			(u32)(((function & 0xff) << 8) + (index & 0xff)) );
-
-        pci_write(0, DEV_PCI_BUS,
-			PCI_DEVFN(DEV_PCI_DEVICE,DEV_PCI_FUNCTION),
-			dev_cap + DEV_DATA_OFFSET,
-			4, value);
-}
-
-static void dev_disable_sl(u32 dev_cap)
-{
-	u32 dev_cr = dev_read(dev_cap, DEV_CR, 0);
-	dev_write(dev_cap, DEV_CR, 0, dev_cr & ~(DEV_CR_SL_DEV_EN_MASK));
-}
-
-void disable_memory_protection(void)
-{
-	u32 dev_cap, sldev;
-
-	dev_cap = dev_locate();
-	if (dev_cap) {
-		/* Older families with remains of DEV */
-		dev_disable_sl(dev_cap);
-		return;
-	}
-
-	/* Fam 17h uses different DMA protection control register */
-	pci_read(0, MCH_PCI_BUS,
-		 PCI_DEVFN(MCH_PCI_DEVICE, MCH_PCI_FUNCTION),
-		 MEMPROT_CR, 4, &sldev);
-	pci_write(0, MCH_PCI_BUS,
-		  PCI_DEVFN(MCH_PCI_DEVICE, MCH_PCI_FUNCTION),
-		  MEMPROT_CR, 4, sldev & ~(MEMPROT_EN));
+	return pci_locate(IOMMU_PCI_BUS,
+	                  PCI_DEVFN(IOMMU_PCI_DEVICE, IOMMU_PCI_FUNCTION));
 }
 
 static void send_command(u64 *mmio_base, iommu_command_t cmd)

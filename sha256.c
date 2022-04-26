@@ -18,6 +18,7 @@
 #include <byteswap.h>
 #include <types.h>
 #include <sha256.h>
+#include <string.h>
 
 #define SHA256_BLOCK_SIZE	64
 
