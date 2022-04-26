@@ -113,32 +113,6 @@
 #define COMPLETE_PPR_REQUEST		7
 #define INVALIDATE_IOMMU_ALL		8
 
-#define INVALID_CAP(c) 			((c == 0) || (c == 0xFFFFFFFF) || (c == 0xFF))
-
-/*
- * Following are used to disable initial SLB protection only on
- * platforms where DEV is present (Family 16h and older).
- */
-#define DEV_PCI_BUS		0x0
-#define DEV_PCI_DEVICE		0x18
-#define DEV_PCI_FUNCTION	0x3
-
-#define DEV_OP_OFFSET		4
-#define DEV_DATA_OFFSET		8
-
-#define DEV_CR			4
-
-#define DEV_CR_SL_DEV_EN_MASK	(1<<5)
-
-/* Family 17h and newer */
-#define MCH_PCI_BUS		0x0
-#define MCH_PCI_DEVICE		0x18
-#define MCH_PCI_FUNCTION	0x0
-
-#define MEMPROT_CR		0x384
-
-#define MEMPROT_EN		(1<<0)
-
 typedef struct dte {
 	u64 a, b, c, d;
 } iommu_dte_t;
