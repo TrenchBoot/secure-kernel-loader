@@ -2,31 +2,31 @@
 
 void *(memcpy)(void *dst, const void *src, size_t count)
 {
-	const char *s = src;
-	char *d = dst;
+    const char *s = src;
+    char *d = dst;
 
-	while (count--)
-		*d++ = *s++;
+    while ( count-- )
+        *d++ = *s++;
 
-	return dst;
+    return dst;
 }
 
 void *(memset)(void *dst, int c, size_t n)
 {
-	char *d = dst;
+    char *d = dst;
 
-	while ( n-- )
-		*d++ = c;
+    while ( n-- )
+        *d++ = c;
 
-	return dst;
+    return dst;
 }
 
 size_t (strlen)(const char *s)
 {
-	size_t c = 0;
+    size_t c = 0;
 
-	while (*s++)
-		c++;
+    while ( *s++ )
+        c++;
 
-	return c;
+    return c;
 }

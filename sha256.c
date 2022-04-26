@@ -20,27 +20,27 @@
 #include <sha256.h>
 #include <string.h>
 
-#define SHA256_BLOCK_SIZE	64
+#define SHA256_BLOCK_SIZE   64
 
 struct sha256_state {
-	u32 state[SHA256_DIGEST_SIZE / 4];
-	u32 count;
-	u8 buf[SHA256_BLOCK_SIZE];
+    u32 state[SHA256_DIGEST_SIZE / 4];
+    u32 count;
+    u8 buf[SHA256_BLOCK_SIZE];
 };
 
 static inline u32 ror32(u32 word, unsigned int shift)
 {
-	return (word >> shift) | (word << (32 - shift));
+    return (word >> shift) | (word << (32 - shift));
 }
 
 static inline u32 Ch(u32 x, u32 y, u32 z)
 {
-	return z ^ (x & (y ^ z));
+    return z ^ (x & (y ^ z));
 }
 
 static inline u32 Maj(u32 x, u32 y, u32 z)
 {
-	return (x & y) | (z & (x | y));
+    return (x & y) | (z & (x | y));
 }
 
 #define e0(x)       (ror32(x, 2) ^ ror32(x, 13) ^ ror32(x, 22))
@@ -52,146 +52,149 @@ static u32 sha256_blend(u32 *W, unsigned int i)
 {
 #define W(i) W[(i) & 15]
 
-	return W(i) += s1(W(i - 2)) + W(i - 7) + s0(W(i - 15));
+    return W(i) += s1(W(i - 2)) + W(i - 7) + s0(W(i - 15));
 
 #undef W
 }
 
 static const u32 K[] = {
-	0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,
-	0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
-	0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,
-	0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
-	0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,
-	0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
-	0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,
-	0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
-	0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,
-	0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
-	0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,
-	0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
-	0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,
-	0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
-	0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,
-	0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,
+    0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,
+    0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,
+    0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,
+    0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,
+    0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,
+    0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,
+    0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,
+    0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
 };
 
 static void sha256_transform(u32 *state, const void *_input)
 {
-	const u32 *input = _input;
-	u32 a, b, c, d, e, f, g, h, t1, t2;
-	u32 W[16];
-	int i;
+    const u32 *input = _input;
+    u32 a, b, c, d, e, f, g, h, t1, t2;
+    u32 W[16];
+    int i;
 
-	/* load the input */
-	for (i = 0; i < 16; i++)
-		W[i] = be32_to_cpu(input[i]);
+    /* load the input */
+    for ( i = 0; i < 16; i++ )
+        W[i] = be32_to_cpu(input[i]);
 
-	/* load the state into our registers */
-	a = state[0];  b = state[1];  c = state[2];  d = state[3];
-	e = state[4];  f = state[5];  g = state[6];  h = state[7];
+    /* load the state into our registers */
+    a = state[0];  b = state[1];  c = state[2];  d = state[3];
+    e = state[4];  f = state[5];  g = state[6];  h = state[7];
 
-	/* now iterate */
-	for (i = 0; i < 16; i += 8) {
-		t1 = h + e1(e) + Ch(e, f, g) + K[i + 0] + W[i + 0];
-		t2 = e0(a) + Maj(a, b, c);    d += t1;    h = t1 + t2;
-		t1 = g + e1(d) + Ch(d, e, f) + K[i + 1] + W[i + 1];
-		t2 = e0(h) + Maj(h, a, b);    c += t1;    g = t1 + t2;
-		t1 = f + e1(c) + Ch(c, d, e) + K[i + 2] + W[i + 2];
-		t2 = e0(g) + Maj(g, h, a);    b += t1;    f = t1 + t2;
-		t1 = e + e1(b) + Ch(b, c, d) + K[i + 3] + W[i + 3];
-		t2 = e0(f) + Maj(f, g, h);    a += t1;    e = t1 + t2;
-		t1 = d + e1(a) + Ch(a, b, c) + K[i + 4] + W[i + 4];
-		t2 = e0(e) + Maj(e, f, g);    h += t1;    d = t1 + t2;
-		t1 = c + e1(h) + Ch(h, a, b) + K[i + 5] + W[i + 5];
-		t2 = e0(d) + Maj(d, e, f);    g += t1;    c = t1 + t2;
-		t1 = b + e1(g) + Ch(g, h, a) + K[i + 6] + W[i + 6];
-		t2 = e0(c) + Maj(c, d, e);    f += t1;    b = t1 + t2;
-		t1 = a + e1(f) + Ch(f, g, h) + K[i + 7] + W[i + 7];
-		t2 = e0(b) + Maj(b, c, d);    e += t1;    a = t1 + t2;
-	}
+    /* now iterate */
+    for ( i = 0; i < 16; i += 8 )
+    {
+        t1 = h + e1(e) + Ch(e, f, g) + K[i + 0] + W[i + 0];
+        t2 = e0(a) + Maj(a, b, c);    d += t1;    h = t1 + t2;
+        t1 = g + e1(d) + Ch(d, e, f) + K[i + 1] + W[i + 1];
+        t2 = e0(h) + Maj(h, a, b);    c += t1;    g = t1 + t2;
+        t1 = f + e1(c) + Ch(c, d, e) + K[i + 2] + W[i + 2];
+        t2 = e0(g) + Maj(g, h, a);    b += t1;    f = t1 + t2;
+        t1 = e + e1(b) + Ch(b, c, d) + K[i + 3] + W[i + 3];
+        t2 = e0(f) + Maj(f, g, h);    a += t1;    e = t1 + t2;
+        t1 = d + e1(a) + Ch(a, b, c) + K[i + 4] + W[i + 4];
+        t2 = e0(e) + Maj(e, f, g);    h += t1;    d = t1 + t2;
+        t1 = c + e1(h) + Ch(h, a, b) + K[i + 5] + W[i + 5];
+        t2 = e0(d) + Maj(d, e, f);    g += t1;    c = t1 + t2;
+        t1 = b + e1(g) + Ch(g, h, a) + K[i + 6] + W[i + 6];
+        t2 = e0(c) + Maj(c, d, e);    f += t1;    b = t1 + t2;
+        t1 = a + e1(f) + Ch(f, g, h) + K[i + 7] + W[i + 7];
+        t2 = e0(b) + Maj(b, c, d);    e += t1;    a = t1 + t2;
+    }
 
-	for (; i < 64; i += 8) {
-		t1 = h + e1(e) + Ch(e, f, g) + K[i + 0] + sha256_blend(W, i + 0);
-		t2 = e0(a) + Maj(a, b, c);    d += t1;    h = t1+t2;
-		t1 = g + e1(d) + Ch(d, e, f) + K[i + 1] + sha256_blend(W, i + 1);
-		t2 = e0(h) + Maj(h, a, b);    c += t1;    g = t1+t2;
-		t1 = f + e1(c) + Ch(c, d, e) + K[i + 2] + sha256_blend(W, i + 2);
-		t2 = e0(g) + Maj(g, h, a);    b += t1;    f = t1+t2;
-		t1 = e + e1(b) + Ch(b, c, d) + K[i + 3] + sha256_blend(W, i + 3);
-		t2 = e0(f) + Maj(f, g, h);    a += t1;    e = t1+t2;
-		t1 = d + e1(a) + Ch(a, b, c) + K[i + 4] + sha256_blend(W, i + 4);
-		t2 = e0(e) + Maj(e, f, g);    h += t1;    d = t1+t2;
-		t1 = c + e1(h) + Ch(h, a, b) + K[i + 5] + sha256_blend(W, i + 5);
-		t2 = e0(d) + Maj(d, e, f);    g += t1;    c = t1+t2;
-		t1 = b + e1(g) + Ch(g, h, a) + K[i + 6] + sha256_blend(W, i + 6);
-		t2 = e0(c) + Maj(c, d, e);    f += t1;    b = t1+t2;
-		t1 = a + e1(f) + Ch(f, g, h) + K[i + 7] + sha256_blend(W, i + 7);
-		t2 = e0(b) + Maj(b, c, d);    e += t1;    a = t1+t2;
-	}
+    for ( ; i < 64; i += 8 )
+    {
+        t1 = h + e1(e) + Ch(e, f, g) + K[i + 0] + sha256_blend(W, i + 0);
+        t2 = e0(a) + Maj(a, b, c);    d += t1;    h = t1+t2;
+        t1 = g + e1(d) + Ch(d, e, f) + K[i + 1] + sha256_blend(W, i + 1);
+        t2 = e0(h) + Maj(h, a, b);    c += t1;    g = t1+t2;
+        t1 = f + e1(c) + Ch(c, d, e) + K[i + 2] + sha256_blend(W, i + 2);
+        t2 = e0(g) + Maj(g, h, a);    b += t1;    f = t1+t2;
+        t1 = e + e1(b) + Ch(b, c, d) + K[i + 3] + sha256_blend(W, i + 3);
+        t2 = e0(f) + Maj(f, g, h);    a += t1;    e = t1+t2;
+        t1 = d + e1(a) + Ch(a, b, c) + K[i + 4] + sha256_blend(W, i + 4);
+        t2 = e0(e) + Maj(e, f, g);    h += t1;    d = t1+t2;
+        t1 = c + e1(h) + Ch(h, a, b) + K[i + 5] + sha256_blend(W, i + 5);
+        t2 = e0(d) + Maj(d, e, f);    g += t1;    c = t1+t2;
+        t1 = b + e1(g) + Ch(g, h, a) + K[i + 6] + sha256_blend(W, i + 6);
+        t2 = e0(c) + Maj(c, d, e);    f += t1;    b = t1+t2;
+        t1 = a + e1(f) + Ch(f, g, h) + K[i + 7] + sha256_blend(W, i + 7);
+        t2 = e0(b) + Maj(b, c, d);    e += t1;    a = t1+t2;
+    }
 
-	state[0] += a; state[1] += b; state[2] += c; state[3] += d;
-	state[4] += e; state[5] += f; state[6] += g; state[7] += h;
+    state[0] += a; state[1] += b; state[2] += c; state[3] += d;
+    state[4] += e; state[5] += f; state[6] += g; state[7] += h;
 }
 
 static void sha256_init(struct sha256_state *sctx)
 {
-	*sctx = (struct sha256_state){
-		.state = {
-			0x6a09e667UL,
-			0xbb67ae85UL,
-			0x3c6ef372UL,
-			0xa54ff53aUL,
-			0x510e527fUL,
-			0x9b05688cUL,
-			0x1f83d9abUL,
-			0x5be0cd19UL,
-		},
-	};
+    *sctx = (struct sha256_state){
+        .state = {
+            0x6a09e667UL,
+            0xbb67ae85UL,
+            0x3c6ef372UL,
+            0xa54ff53aUL,
+            0x510e527fUL,
+            0x9b05688cUL,
+            0x1f83d9abUL,
+            0x5be0cd19UL,
+        },
+    };
 }
 
 static void sha256_once(struct sha256_state *sctx, const void *data, u32 len)
 {
-	sctx->count = len;
-	for (; len >= 64; data += 64, len -= 64)
-		sha256_transform(sctx->state, data);
+    sctx->count = len;
+    for ( ; len >= 64; data += 64, len -= 64 )
+        sha256_transform(sctx->state, data);
 
-	memcpy(sctx->buf, data, len);
+    memcpy(sctx->buf, data, len);
 }
 
 static void sha256_final(struct sha256_state *sctx, void *_dst)
 {
-	u32 *dst = _dst;
-	u64 *count;
-	unsigned int i, partial = sctx->count & 0x3f;
+    u32 *dst = _dst;
+    u64 *count;
+    unsigned int i, partial = sctx->count & 0x3f;
 
-	/* Start padding */
-	sctx->buf[partial++] = 0x80;
+    /* Start padding */
+    sctx->buf[partial++] = 0x80;
 
-	if (partial > 56) {
-		/* Need one extra block - pad to 64 */
-		memset(sctx->buf + partial, 0, 64 - partial);
-		sha256_transform(sctx->state, sctx->buf);
-		partial = 0;
-	}
-	/* Pad to 56 */
-	memset(sctx->buf + partial, 0, 56 - partial);
+    if ( partial > 56 )
+    {
+        /* Need one extra block - pad to 64 */
+        memset(sctx->buf + partial, 0, 64 - partial);
+        sha256_transform(sctx->state, sctx->buf);
+        partial = 0;
+    }
+    /* Pad to 56 */
+    memset(sctx->buf + partial, 0, 56 - partial);
 
-	/* Append the 64 bit count */
-	count = (void *)&sctx->buf[56];
-	*count = cpu_to_be64((u64)sctx->count << 3);
-	sha256_transform(sctx->state, sctx->buf);
+    /* Append the 64 bit count */
+    count = (void *)&sctx->buf[56];
+    *count = cpu_to_be64((u64)sctx->count << 3);
+    sha256_transform(sctx->state, sctx->buf);
 
-	/* Store state in digest */
-	for (i = 0; i < 8; i++)
-		dst[i] = cpu_to_be32(sctx->state[i]);
+    /* Store state in digest */
+    for ( i = 0; i < 8; i++ )
+        dst[i] = cpu_to_be32(sctx->state[i]);
 }
 
 void sha256sum(u8 hash[static SHA256_DIGEST_SIZE], const void *data, u32 len)
 {
-	struct sha256_state sctx;
+    struct sha256_state sctx;
 
-	sha256_init(&sctx);
-	sha256_once(&sctx, data, len);
-	sha256_final(&sctx, hash);
+    sha256_init(&sctx);
+    sha256_once(&sctx, data, len);
+    sha256_final(&sctx, hash);
 }
