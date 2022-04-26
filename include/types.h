@@ -44,21 +44,21 @@ typedef  int64_t s64;
  * environment for us to rely on.
  */
 
-typedef unsigned char		u8;
-typedef unsigned short		u16;
-typedef unsigned int		u32;
-typedef unsigned long long	u64;
-typedef signed char		s8;
-typedef short			s16;
-typedef int			s32;
-typedef long long		s64;
+typedef unsigned char       u8;
+typedef unsigned short      u16;
+typedef unsigned int        u32;
+typedef unsigned long long  u64;
+typedef signed char         s8;
+typedef short               s16;
+typedef int                 s32;
+typedef long long           s64;
 
-typedef unsigned long	uintptr_t;
+typedef unsigned long   uintptr_t;
 
-typedef unsigned long	size_t;
-typedef long		ssize_t;
+typedef unsigned long   size_t;
+typedef long            ssize_t;
 
-typedef _Bool		bool;
+typedef _Bool           bool;
 
 #define NULL ((void *)0)
 

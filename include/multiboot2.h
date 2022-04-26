@@ -42,72 +42,72 @@ typedef unsigned long long      u64;
 
 struct multiboot_tag
 {
-  u32 type;
-  u32 size;
+    u32 type;
+    u32 size;
 };
 
 struct multiboot_tag_string
 {
-  u32 type;
-  u32 size;
-  char string[0];
+    u32 type;
+    u32 size;
+    char string[0];
 };
 
 struct multiboot_tag_module
 {
-  u32 type;
-  u32 size;
-  u32 mod_start;
-  u32 mod_end;
-  char cmdline[0];
+    u32 type;
+    u32 size;
+    u32 mod_start;
+    u32 mod_end;
+    char cmdline[0];
 };
 
 typedef struct {
-  u32 pad0[1];
-  u32 sh_type;
-  u32 pad1[2];
-  u32 sh_offset;
-  u32 sh_size;
-  u32 pad2[4];
+    u32 pad0[1];
+    u32 sh_type;
+    u32 pad1[2];
+    u32 sh_offset;
+    u32 sh_size;
+    u32 pad2[4];
 } Elf32_Shdr;
 
 enum ShT_Types {
-  SHT_NULL      = 0,   // Null section
-  SHT_PROGBITS  = 1,   // Program information
-  SHT_SYMTAB    = 2,   // Symbol table
-  SHT_STRTAB    = 3,   // String table
-  SHT_RELA      = 4,   // Relocation (w/ addend)
-  SHT_HASH      = 5,   // Symbol hash table
-  SHT_DYNAMIC   = 6,   // Dynamic linking information
-  SHT_NOTE      = 7,   // Notes
-  SHT_NOBITS    = 8,   // Not present in file (bss)
-  SHT_REL       = 9,   // Relocation (no addend)
-  SHT_SHLIB     = 10,  // Reserved
-  SHT_DYNSYM    = 11   // Dynamic loader symbol table
+    SHT_NULL      = 0,   /* Null section */
+    SHT_PROGBITS  = 1,   /* Program information */
+    SHT_SYMTAB    = 2,   /* Symbol table */
+    SHT_STRTAB    = 3,   /* String table */
+    SHT_RELA      = 4,   /* Relocation (w/ addend) */
+    SHT_HASH      = 5,   /* Symbol hash table */
+    SHT_DYNAMIC   = 6,   /* Dynamic linking information */
+    SHT_NOTE      = 7,   /* Notes */
+    SHT_NOBITS    = 8,   /* Not present in file (bss) */
+    SHT_REL       = 9,   /* Relocation (no addend) */
+    SHT_SHLIB     = 10,  /* Reserved */
+    SHT_DYNSYM    = 11   /* Dynamic loader symbol table */
 };
 
 struct multiboot_tag_elf_sections
 {
-  u32 type;
-  u32 size;
-  u32 num;
-  u32 entsize;
-  u32 shndx;
-  char sections[0];
+    u32 type;
+    u32 size;
+    u32 num;
+    u32 entsize;
+    u32 shndx;
+    char sections[0];
 };
 
 struct multiboot_tag_load_base_addr
 {
-  u32 type;
-  u32 size;
-  u32 load_base_addr;
+    u32 type;
+    u32 size;
+    u32 load_base_addr;
 };
 
 static inline struct multiboot_tag *multiboot_next_tag(struct multiboot_tag *t)
 {
-  void *tag = (void *)t;
-  tag += (t->size + (MULTIBOOT_TAG_ALIGN - 1)) & ~(MULTIBOOT_TAG_ALIGN - 1);
-  return tag;
+    void *tag = t;
+    tag += (t->size + (MULTIBOOT_TAG_ALIGN - 1)) & ~(MULTIBOOT_TAG_ALIGN - 1);
+    return tag;
 }
 
 #endif /*  ! __ASSEMBLY__ */

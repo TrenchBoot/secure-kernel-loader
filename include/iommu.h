@@ -114,19 +114,19 @@
 #define INVALIDATE_IOMMU_ALL		8
 
 typedef struct dte {
-	u64 a, b, c, d;
+    u64 a, b, c, d;
 } iommu_dte_t;
 
 extern iommu_dte_t device_table[2 * PAGE_SIZE / sizeof(iommu_dte_t)];
 
 typedef struct __packed {
-	u32 u0;
-	union {
-		u32 u1;
-		struct { u32 padding:28; u32 opcode:4; };
-	};
-	u32 u2;
-	u32 u3;
+    u32 u0;
+    union {
+        u32 u1;
+        struct { u32 padding:28; u32 opcode:4; };
+    };
+    u32 u2;
+    u32 u3;
 } iommu_command_t;
 
 extern char event_log[PAGE_SIZE];

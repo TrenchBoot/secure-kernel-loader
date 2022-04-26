@@ -29,25 +29,23 @@
 #include <sha1sum.h>
 #include <string.h>
 
-static inline u32
-rol( u32 x, int n)
+static inline u32 rol( u32 x, int n)
 {
     return (x << n) | (x >> (-n & 31));
 }
 
 typedef struct {
-	u32		count;
-	union {
-		struct {
-			u32	h0, h1, h2, h3, h4;
-		};
-		u32 h[5];
-	};
-	unsigned char	buf[64];
+    u32 count;
+    union {
+        struct {
+            u32 h0, h1, h2, h3, h4;
+        };
+        u32 h[5];
+    };
+    unsigned char buf[64];
 } SHA1_CONTEXT;
 
-static void
-sha1_init( SHA1_CONTEXT *hd )
+static void sha1_init( SHA1_CONTEXT *hd )
 {
     *hd = (SHA1_CONTEXT){
         .h0 = 0x67452301,
@@ -84,7 +82,7 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
     d = hd->h3;
     e = hd->h4;
 
-    for (i = 0; i < 16; ++i)
+    for ( i = 0; i < 16; ++i )
         x[i] = cpu_to_be32(data[i]);
 
 
@@ -100,13 +98,14 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
 
 #define M(i) sha1_blend(x, i)
 #define R(a,b,c,d,e,f,k,m)  do { e += rol( a, 5 )     \
-				      + f( b, c, d )  \
-				      + k	      \
-				      + m;	      \
-				 b = rol( b, 30 );    \
-			       } while(0)
+                      + f( b, c, d )  \
+                      + k         \
+                      + m;        \
+                 b = rol( b, 30 );    \
+                   } while(0)
 
-    for (i = 0; i < 15; i += 5) {
+    for ( i = 0; i < 15; i += 5 )
+    {
         R(a, b, c, d, e, F1, K1, x[i + 0]);
         R(e, a, b, c, d, F1, K1, x[i + 1]);
         R(d, e, a, b, c, F1, K1, x[i + 2]);
@@ -120,7 +119,8 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
     R( c, d, e, a, b, F1, K1, M(18) );
     R( b, c, d, e, a, F1, K1, M(19) );
 
-    for (i = 20; i < 40; i += 5) {
+    for ( i = 20; i < 40; i += 5 )
+    {
         R(a, b, c, d, e, F2, K2, M(i + 0));
         R(e, a, b, c, d, F2, K2, M(i + 1));
         R(d, e, a, b, c, F2, K2, M(i + 2));
@@ -128,7 +128,8 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
         R(b, c, d, e, a, F2, K2, M(i + 4));
     }
 
-    for (; i < 60; i += 5) {
+    for ( ; i < 60; i += 5 )
+    {
         R(a, b, c, d, e, F3, K3, M(i + 0));
         R(e, a, b, c, d, F3, K3, M(i + 1));
         R(d, e, a, b, c, F3, K3, M(i + 2));
@@ -136,7 +137,8 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
         R(b, c, d, e, a, F3, K3, M(i + 4));
     }
 
-    for (; i < 80; i += 5) {
+    for ( ; i < 80; i += 5 )
+    {
         R(a, b, c, d, e, F4, K4, M(i + 0));
         R(e, a, b, c, d, F4, K4, M(i + 1));
         R(d, e, a, b, c, F4, K4, M(i + 2));
@@ -156,7 +158,7 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
 static void sha1_once(SHA1_CONTEXT *hd, const void *data, u32 len)
 {
     hd->count = len;
-    for (; len >= 64; data += 64, len -= 64)
+    for ( ; len >= 64; data += 64, len -= 64 )
         sha1_transform(hd, data);
 
     memcpy(hd->buf, data, len);
@@ -178,7 +180,8 @@ sha1_final(SHA1_CONTEXT *hd, u8 hash[SHA1_DIGEST_SIZE])
     /* Start padding */
     hd->buf[partial++] = 0x80;
 
-    if (partial > 56) {
+    if ( partial > 56 )
+    {
         /* Need one extra block - pad to 64 */
         memset(hd->buf + partial, 0, 64 - partial);
         sha1_transform(hd, hd->buf);
@@ -193,8 +196,8 @@ sha1_final(SHA1_CONTEXT *hd, u8 hash[SHA1_DIGEST_SIZE])
     sha1_transform(hd, hd->buf);
 
     u32 *p = (void *)hash;
-    for (int i = 0; i < 5; ++i)
-	    p[i] = be32_to_cpu(hd->h[i]);
+    for ( int i = 0; i < 5; ++i )
+        p[i] = be32_to_cpu(hd->h[i]);
 }
 
 void sha1sum(u8 hash[static SHA1_DIGEST_SIZE], const void *ptr, u32 len)

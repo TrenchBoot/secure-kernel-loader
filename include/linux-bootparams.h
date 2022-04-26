@@ -32,22 +32,22 @@ struct kernel_info {
     u32 mle_header_offset;
 };
 
-#define MLE_UUID0	0x9082ac5a
-#define MLE_UUID1	0x74a7476f
-#define MLE_UUID2	0xa2555c0f
-#define MLE_UUID3	0x42b651cb
+#define MLE_UUID0   0x9082ac5a
+#define MLE_UUID1   0x74a7476f
+#define MLE_UUID2   0xa2555c0f
+#define MLE_UUID3   0x42b651cb
 struct mle_header {
-	u32 uuid[4];
-	u32 size;		/* 0x00000034 MLE header size */
-	u32 version;		/* 0x00020002 MLE version 2.2 */
-	u32 sl_stub_entry;	/* Linear entry point of MLE (virt. address) */
-	/* The following fields are used only for Intel TXT */
-	u32 first_page;		/* First valid page of MLE */
-	u32 start_offset;	/* Offset within binary of first byte of MLE */
-	u32 end_offset;		/* Offset within binary of last byte + 1 of MLE */
-	u32 vector;		/* Bit vector of MLE-supported capabilities */
-	u32 cmdline_start;	/* Starting linear address of command line */
-	u32 cmdline_end;	/* Ending linear address of command line */
+    u32 uuid[4];
+    u32 size;       /* 0x00000034 MLE header size */
+    u32 version;        /* 0x00020002 MLE version 2.2 */
+    u32 sl_stub_entry;  /* Linear entry point of MLE (virt. address) */
+    /* The following fields are used only for Intel TXT */
+    u32 first_page;     /* First valid page of MLE */
+    u32 start_offset;   /* Offset within binary of first byte of MLE */
+    u32 end_offset;     /* Offset within binary of last byte + 1 of MLE */
+    u32 vector;     /* Bit vector of MLE-supported capabilities */
+    u32 cmdline_start;  /* Starting linear address of command line */
+    u32 cmdline_end;    /* Ending linear address of command line */
 };
 
 #endif /* _LINUX_BOOTPARAMS_H */
