@@ -47,7 +47,7 @@
 #define PCI_SLOT(devfn)         (((devfn) >> 3) & 0x1f)
 #define PCI_FUNC(devfn)         ((devfn) & 0x07)
 
-#define INVALID_CAP(c)      ((c == 0) || (c == 0xFFFFFFFF) || (c == 0xFF))
+#define INVALID_CAP(c)          ((c == 0) || (c == 0xFFFFFFFF) || (c == 0xFF))
 
 
 /* From arch/x86/pci/direct.c definitions */

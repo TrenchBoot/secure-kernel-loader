@@ -20,23 +20,23 @@ struct setup_data {
     struct setup_indirect indirect;
 } __packed;
 
-#define SKL_TAG_CLASS_MASK  0xF0
+#define SKL_TAG_CLASS_MASK       0xF0
 
 /* Tags with no particular class */
-#define SKL_TAG_NO_CLASS        0x00
-#define SKL_TAG_END     0x00
-#define SKL_TAG_SETUP_INDIRECT  0x01
-#define SKL_TAG_TAGS_SIZE   0x0F    /* Always first */
+#define SKL_TAG_NO_CLASS         0x00
+#define SKL_TAG_END              0x00
+#define SKL_TAG_SETUP_INDIRECT   0x01
+#define SKL_TAG_TAGS_SIZE        0x0F    /* Always first */
 
 /* Tags specifying kernel type */
-#define SKL_TAG_BOOT_CLASS  0x10
-#define SKL_TAG_BOOT_LINUX  0x10
-#define SKL_TAG_BOOT_MB2        0x11
+#define SKL_TAG_BOOT_CLASS       0x10
+#define SKL_TAG_BOOT_LINUX       0x10
+#define SKL_TAG_BOOT_MB2         0x11
 
 /* Tags specific to TPM event log */
-#define SKL_TAG_EVENT_LOG_CLASS 0x20
-#define SKL_TAG_EVENT_LOG   0x20
-#define SKL_TAG_SKL_HASH        0x21
+#define SKL_TAG_EVENT_LOG_CLASS  0x20
+#define SKL_TAG_EVENT_LOG        0x20
+#define SKL_TAG_SKL_HASH         0x21
 
 struct skl_tag_hdr {
     u8 type;

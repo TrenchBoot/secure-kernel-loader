@@ -53,14 +53,15 @@ typedef short               s16;
 typedef int                 s32;
 typedef long long           s64;
 
-typedef unsigned long   uintptr_t;
+typedef unsigned long       uintptr_t;
 
-typedef unsigned long   size_t;
-typedef long            ssize_t;
+typedef unsigned long       size_t;
+typedef long                ssize_t;
 
-typedef _Bool           bool;
+typedef _Bool               bool;
 
 #define NULL ((void *)0)
 
 #endif /* __STDC_HOSTED__ */
+
 #endif /* __TYPES_H__ */

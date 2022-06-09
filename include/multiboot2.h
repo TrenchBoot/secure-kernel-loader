@@ -35,11 +35,6 @@
 
 #ifndef __ASSEMBLY__
 
-typedef unsigned char           u8;
-typedef unsigned short          u16;
-typedef unsigned int            u32;
-typedef unsigned long long      u64;
-
 struct multiboot_tag
 {
     u32 type;

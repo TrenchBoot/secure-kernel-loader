@@ -11,7 +11,7 @@ CFLAGS  += -flto
 LDFLAGS += -flto
 endif
 
-ifeq ($(32),y)
+ifeq ($(M32),y)
 CFLAGS  += -m32 -mregparm=3 -fno-plt -freg-struct-return
 LDFLAGS += -m32
 else
