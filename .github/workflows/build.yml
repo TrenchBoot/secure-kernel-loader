@@ -27,5 +27,5 @@ jobs:
 
     - name: make
       run: |
-        make CC=${{matrix.compiler}} 32=${{matrix.bits == 32 && 'y' || 'n'}} ${{matrix.lto}}
+        make CC=${{matrix.compiler}} M32=${{matrix.bits == 32 && 'y' || 'n'}} ${{matrix.lto}}
         ./extend_skl_only.sh
