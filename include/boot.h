@@ -50,10 +50,10 @@ typedef struct __packed sl_header {
 extern sl_header_t sl_header;
 
 typedef struct __packed skl_info {
-       u8  uuid[16]; /* 78 f1 26 8e 04 92 11 e9  83 2a c8 5b 76 c4 cc 02 */
-       u32 version;
-       u16 msb_key_algo;
-       u8  msb_key_hash[64]; /* Support up to SHA512 */
+    u8  uuid[16]; /* 78 f1 26 8e 04 92 11 e9  83 2a c8 5b 76 c4 cc 02 */
+    u32 version;
+    u16 msb_key_algo;
+    u8  msb_key_hash[64]; /* Support up to SHA512 */
 } skl_info_t;
 extern skl_info_t skl_info;
 
