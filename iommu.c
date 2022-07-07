@@ -35,18 +35,18 @@ u32 iommu_locate(void)
                       PCI_DEVFN(IOMMU_PCI_DEVICE, IOMMU_PCI_FUNCTION));
 }
 
-static void send_command(u64 *mmio_base, iommu_command_t cmd)
+static void send_command(u64 *mmio_base, iommu_command_t cmd, u32 *idx)
 {
-    u32 cmd_ptr = mmio_base[IOMMU_MMIO_COMMAND_BUF_TAIL] >> 4;
-    command_buf[cmd_ptr++] = cmd;
+    command_buf[(*idx)++] = cmd;
     smp_wmb();
-    mmio_base[IOMMU_MMIO_COMMAND_BUF_TAIL] = (cmd_ptr << 4);
+    mmio_base[IOMMU_MMIO_COMMAND_BUF_TAIL] =
+        _u(&command_buf[*idx]) - (_u(&command_buf) & ~0xfff);
 }
 
 u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
 {
     u64 *mmio_base;
-    u32 low, hi;
+    u32 low, hi, idx = 0;
     iommu_command_t cmd = {0};
 
     pci_read(0, IOMMU_PCI_BUS,
@@ -65,9 +65,8 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
 
     mmio_base = _p((u64)hi << 32 | (low & 0xffffc000));
 
-    print("IOMMU MMIO Base Address = ");
     print_u64((u64)_u(mmio_base));
-    print("\n");
+    print("IOMMU MMIO Base Address\n");
 
     print_u64(mmio_base[IOMMU_MMIO_STATUS_REGISTER]);
     print("IOMMU_MMIO_STATUS_REGISTER\n");
@@ -106,8 +105,14 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
     mmio_base[IOMMU_MMIO_COMMAND_BUF_HEAD] =
         mmio_base[IOMMU_MMIO_COMMAND_BUF_TAIL] = _u(command_buf) & 0xff0;
 
+    print_u64(_u(command_buf));
+    print("Command Buffer Base\n");
+
     print_u64(mmio_base[IOMMU_MMIO_COMMAND_BUF_BA]);
     print("IOMMU_MMIO_COMMAND_BUF_BA\n");
+
+    print_u64(mmio_base[IOMMU_MMIO_COMMAND_BUF_HEAD]);
+    print("IOMMU_MMIO_COMMAND_BUF_HEAD\n");
 
     /* Address and size of Event Log, reset head and tail registers */
     mmio_base[IOMMU_MMIO_EVENT_LOG_BA] = (u64)_u(event_log) | (0x8ULL << 56);
@@ -132,7 +137,7 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
     {
         print("INVALIDATE_IOMMU_ALL\n");
         cmd.opcode = INVALIDATE_IOMMU_ALL;
-        send_command(mmio_base, cmd);
+        send_command(mmio_base, cmd, &idx);
     } /* TODO: else? */
 
     print_u64(mmio_base[IOMMU_MMIO_EXTENDED_FEATURE]);
@@ -147,7 +152,7 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
 
     cmd.opcode = COMPLETION_WAIT;
     cmd.u2 = 0x656e6f64;    /* "done" */
-    send_command(mmio_base, cmd);
+    send_command(mmio_base, cmd, &idx);
 
     print_u64(mmio_base[IOMMU_MMIO_STATUS_REGISTER]);
     print("IOMMU_MMIO_STATUS_REGISTER\n");
