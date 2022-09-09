@@ -180,8 +180,12 @@ GLOBAL(_entry)
 	push	$0
 	popf
 
-	cmpl	$MULTIBOOT2, boot_protocol(%ebp)
+	mov	boot_protocol(%ebp), %edx
+	cmp	$MULTIBOOT2, %edx
 	je	multiboot2_kernel
+
+	cmp	$SIMPLE_PAYLOAD, %edx
+	je	simple_payload
 
 	/* Jump to entry target - EBX: startup_32, ESI: ZP base, EDX: SKL base */
 	mov	%ebp, %edx
@@ -192,6 +196,12 @@ multiboot2_kernel:
 	xchg	%esi, %ebx
 	mov	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
 	jmp *%esi
+
+simple_payload:
+	/* Jump to entry target - argument and dummy return address on stack */
+	push	%esi
+	push	$0
+	jmp	*%ebx
 ENDFUNC(_entry)
 
 	.data

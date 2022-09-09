@@ -32,6 +32,7 @@ struct setup_data {
 #define SKL_TAG_BOOT_CLASS       0x10
 #define SKL_TAG_BOOT_LINUX       0x10
 #define SKL_TAG_BOOT_MB2         0x11
+#define SKL_TAG_BOOT_SIMPLE      0x12
 
 /* Tags specific to TPM event log */
 #define SKL_TAG_EVENT_LOG_CLASS  0x20
@@ -58,6 +59,14 @@ struct skl_tag_boot_mb2 {
     u32 mbi;
     u32 kernel_entry;
     u32 kernel_size;
+} __packed;
+
+struct skl_tag_boot_simple_payload {
+    struct skl_tag_hdr hdr;
+    u32 base;
+    u32 size;
+    u32 entry;
+    u32 arg;
 } __packed;
 
 struct skl_tag_evtlog {

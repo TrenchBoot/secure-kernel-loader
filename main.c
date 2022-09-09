@@ -445,6 +445,15 @@ static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl
     return (asm_return_t){ kernel_entry, _p(skl_tag->mbi) };
 }
 
+static asm_return_t skl_simple_payload(struct tpm *tpm, struct skl_tag_boot_simple_payload *skl_tag)
+{
+    extend_pcr(tpm, _p(skl_tag->base), skl_tag->size, 17, "Measured payload into PCR17");
+
+    boot_protocol = SIMPLE_PAYLOAD;
+
+    return (asm_return_t){ _p(skl_tag->entry), _p(skl_tag->arg) };
+}
+
 asm_return_t skl_main(void)
 {
     asm_return_t ret;
@@ -500,6 +509,9 @@ asm_return_t skl_main(void)
         break;
     case SKL_TAG_BOOT_MB2:
         ret = skl_multiboot2(tpm, (struct skl_tag_boot_mb2 *)t);
+        break;
+    case SKL_TAG_BOOT_SIMPLE:
+        ret = skl_simple_payload(tpm, (struct skl_tag_boot_simple_payload *)t);
         break;
     default:
         print("Unknown kernel boot protocol\n");
