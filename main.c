@@ -290,9 +290,6 @@ static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_ta
     /* The Zero Page with the boot_params and legacy header */
     bp = _p(skl_tag->zero_page);
 
-    /* Disable memory protection and setup IOMMU */
-    iommu_setup();
-
     print("\ncode32_start ");
     print_p(_p(bp->code32_start));
 
@@ -361,9 +358,6 @@ static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl
      * or 0 */
     kernel_size = skl_tag->kernel_size;
     kernel_entry = _p(skl_tag->kernel_entry);
-
-    /* Disable memory protection and setup IOMMU */
-    iommu_setup();
 
     /* Extend PCR18 with MBI structure's hash; this includes all cmdlines.
      * Use 'type' and not 'size', as their offsets are swapped in the header! */
@@ -465,6 +459,9 @@ asm_return_t skl_main(void)
      * include the Secure Launch stub.
      */
     pci_init();
+
+    /* Disable memory protection and setup IOMMU */
+    iommu_setup();
 
     if ( t->type                              != SKL_TAG_TAGS_SIZE
          || t->len                            != sizeof(struct skl_tag_tags_size)
