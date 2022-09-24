@@ -11,12 +11,15 @@ CFLAGS  += -flto
 LDFLAGS += -flto
 endif
 
-ifeq ($(M32),y)
+BITS ?= 64
+ifeq ($(BITS),32)
 CFLAGS  += -m32 -mregparm=3 -fno-plt -freg-struct-return
 LDFLAGS += -m32
-else
+else ifeq ($(BITS),64)
 CFLAGS  += -m64
 LDFLAGS += -m64
+else
+$(error Bad $$(BITS) value '$(BITS)')
 endif
 
 # There is a 64k total limit, so optimise for size.  The binary may be loaded

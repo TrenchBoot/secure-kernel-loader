@@ -8,7 +8,7 @@ jobs:
     strategy:
       matrix:
         compiler: [gcc-9, gcc-10, gcc-11, clang-12, clang-13, clang-14]
-        bits: [32, 64]
+        bits: ['32', '64']
         lto: [LTO=y, LTO=n]
 
     runs-on: 'ubuntu-22.04'
@@ -23,5 +23,5 @@ jobs:
 
     - name: make
       run: |
-        make CC=${{matrix.compiler}} M32=${{matrix.bits == 32 && 'y' || 'n'}} ${{matrix.lto}}
+        make CC=${{matrix.compiler}} BITS=${{matrix.bits}} ${{matrix.lto}}
         ./extend_skl_only.sh
