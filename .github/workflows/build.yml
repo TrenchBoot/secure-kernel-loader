@@ -21,10 +21,6 @@ jobs:
 
     - uses: actions/checkout@v2
 
-    - name: Submodules
-      run: |
-        git submodule update --init tpmlib
-
     - name: make
       run: |
         make CC=${{matrix.compiler}} M32=${{matrix.bits == 32 && 'y' || 'n'}} ${{matrix.lto}}
