@@ -552,18 +552,15 @@ asm_return_t skl_main(void)
 
 static void __maybe_unused build_assertions(void)
 {
-    struct boot_params b;
-    struct kernel_info k;
+    BUILD_BUG_ON(offsetof(struct boot_params, tb_dev_map)        != 0x0d8);
+    BUILD_BUG_ON(offsetof(struct boot_params, syssize)           != 0x1f4);
+    BUILD_BUG_ON(offsetof(struct boot_params, version)           != 0x206);
+    BUILD_BUG_ON(offsetof(struct boot_params, code32_start)      != 0x214);
+    BUILD_BUG_ON(offsetof(struct boot_params, cmd_line_ptr)      != 0x228);
+    BUILD_BUG_ON(offsetof(struct boot_params, cmdline_size)      != 0x238);
+    BUILD_BUG_ON(offsetof(struct boot_params, payload_offset)    != 0x248);
+    BUILD_BUG_ON(offsetof(struct boot_params, payload_length)    != 0x24c);
+    BUILD_BUG_ON(offsetof(struct boot_params, kern_info_offset)  != 0x268);
 
-    BUILD_BUG_ON(offsetof(typeof(b), tb_dev_map)        != 0x0d8);
-    BUILD_BUG_ON(offsetof(typeof(b), syssize)           != 0x1f4);
-    BUILD_BUG_ON(offsetof(typeof(b), version)           != 0x206);
-    BUILD_BUG_ON(offsetof(typeof(b), code32_start)      != 0x214);
-    BUILD_BUG_ON(offsetof(typeof(b), cmd_line_ptr)      != 0x228);
-    BUILD_BUG_ON(offsetof(typeof(b), cmdline_size)      != 0x238);
-    BUILD_BUG_ON(offsetof(typeof(b), payload_offset)    != 0x248);
-    BUILD_BUG_ON(offsetof(typeof(b), payload_length)    != 0x24c);
-    BUILD_BUG_ON(offsetof(typeof(b), kern_info_offset)  != 0x268);
-
-    BUILD_BUG_ON(offsetof(typeof(k), mle_header_offset) != 0x010);
+    BUILD_BUG_ON(offsetof(struct kernel_info, mle_header_offset) != 0x010);
 }
