@@ -1,0 +1,32 @@
+name: CodeQL
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '30 12 * * 3' # Weekly, Wed at 12:30 pm
+
+jobs:
+  CodeQL:
+
+    strategy:
+      matrix:
+        bits: ['32', '64']
+        lto: [LTO=y, LTO=n]
+
+    runs-on: 'ubuntu-22.04'
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - uses: github/codeql-action/init@v2
+      with:
+        languages: cpp
+        queries: security-and-quality
+
+    - name: Build
+      run: |
+        make BITS=${{matrix.bits}} ${{matrix.lto}}
+
+    - uses: github/codeql-action/analyze@v2
