@@ -1,0 +1,41 @@
+Name:		secure-kernel-loader
+Version:	@VERSION@
+Release:	1%{?dist}
+Summary:	TrenchBoot Secure Kernel Loader
+License:	GPLv2+
+URL:		https://github.com/TrenchBoot/secure-kernel-loader
+
+Source0:	https://github.com/TrenchBoot/%{name}/archive/%{version}.tar.gz
+
+BuildArch:		x86_64
+BuildRequires:	gcc
+
+
+%description
+Open source implementation of Secure Loader for AMD Secure Startup.
+
+# This is to avoid "Empty %files file ..." error and also because debug package
+# doesn't seem to be useful.
+%global debug_package %{nil}
+
+%prep
+%setup -q
+
+%build
+pwd
+make
+
+%install
+install -D -p -m 0755 ./skl.bin %{buildroot}/boot/skl.bin
+install -D -p -m 0644 ./util.sh %{buildroot}%{_docdir}/%{name}/scripts/util.sh
+install -D -p -m 0755 ./extend_all.sh %{buildroot}%{_docdir}/%{name}/scripts/extend_all.sh
+
+%files
+%license COPYING
+%doc README.md
+/boot/skl.bin
+%{_docdir}/%{name}/scripts/util.sh
+%{_docdir}/%{name}/scripts/extend_all.sh
+
+%changelog
+@CHANGELOG@

@@ -1,0 +1,9 @@
+host:
+  rpm:
+    build:
+    - secure-kernel-loader.spec
+source:
+  files:
+  # mind that generated archives can change their contents
+  - url: https://github.com/TrenchBoot/secure-kernel-loader/archive/@VERSION@.tar.gz
+    sha512: @VERSION@.tar.gz.sha512
