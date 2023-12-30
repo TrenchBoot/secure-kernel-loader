@@ -54,7 +54,7 @@ all: skl.bin
 # image.  One reason this might fail is if the linker decides to put an
 # unreferenced section ahead of .text, in which case link.lds needs adjusting.
 skl.bin: skl Makefile
-	objcopy -O binary -S $< $@
+	objcopy -O binary -S -R '.note.*' $< $@
 	@./sanity_check.sh
 
 skl: link.lds $(OBJ) Makefile
