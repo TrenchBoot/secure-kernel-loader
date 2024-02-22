@@ -67,7 +67,7 @@
 
 /* Due to the 64k total size limit, group all page aligned data together. */
 #define __page_data \
-    __attribute__ ((__section__(".page_data"), __aligned__(PAGE_SIZE)))
+    __attribute__ ((__section__(".bss.page_data"), __aligned__(PAGE_SIZE)))
 
 #define unreachable()   __builtin_unreachable()
 #define offsetof(a, b)  __builtin_offsetof(a, b)

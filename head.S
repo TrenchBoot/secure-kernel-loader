@@ -105,6 +105,15 @@ GLOBAL(_entry)
 	mov	%eax, %ds
 	mov	%eax, %es
 
+	/* Clear .bss.  Linker scripts ensures multiple of 4B size. */
+	xor	%eax, %eax
+	cld
+	lea	_bss(%ebp), %edi
+	lea	_ebss(%ebp), %ecx
+	sub	%edi, %ecx
+	shr	$2, %ecx
+	rep stosl
+
 #ifdef __x86_64__
 	/* Restore CR4, PAE must be enabled before IA-32e mode */
 	mov	%cr4, %ecx
