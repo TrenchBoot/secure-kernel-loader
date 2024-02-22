@@ -65,12 +65,17 @@ SECTIONS
 		*(.bootloader_data)
 	}
 
+	_end = .;
+
 	/* This section is expected to be empty. */
 	.got : {
 		*(.got)
 	}
 
-	_end = .;
+	/* This section is expected to be empty, unless ld is bugged. */
+	.got.plt : {
+		*(.got.plt)
+	}
 
 	/DISCARD/ : {
 		*(.eh_frame*)
@@ -79,3 +84,11 @@ SECTIONS
 
 ASSERT(_end <= 0x10000, "Landing Zone exceeds 64k");
 ASSERT(SIZEOF(.got) == 0, ".got section not empty - non-hidden symbols used?");
+
+/*
+ * At least GNU ld 2.30 and earlier fail to discard the generic part of
+ * .got.plt when no actual entries were allocated. Permit this case alongside
+ * the section being empty.
+ */
+ASSERT(!SIZEOF(.got.plt) || SIZEOF(.got.plt) == 3 * BITS / 8,
+       "unexpected .got.plt size");

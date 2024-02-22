@@ -23,12 +23,12 @@ $(error Bad $$(BITS) value '$(BITS)')
 endif
 
 # There is a 64k total limit, so optimise for size.  The binary may be loaded
-# at an arbitray location, so build it as position independent, but link as
+# at an arbitrary location, so build it as position independent, but link as
 # non-pie as all relocations are internal and there is no dynamic loader to
 # help.
 CFLAGS  += -Os -g -MMD -MP -march=btver2 -mno-sse -mno-mmx -fpie -fomit-frame-pointer
 CFLAGS  += -Iinclude -ffreestanding -fno-common -Wall -Werror
-LDFLAGS += -nostdlib -no-pie -Wl,--build-id=none
+LDFLAGS += -nostdlib -no-pie -Wl,--build-id=none,--fatal-warnings,--defsym=BITS=$(BITS)
 
 CFLAGS_TPMLIB := -include boot.h -include errno-base.h -include byteswap.h -DEBADRQC=EINVAL
 
@@ -54,7 +54,7 @@ all: skl.bin
 # image.  One reason this might fail is if the linker decides to put an
 # unreferenced section ahead of .text, in which case link.lds needs adjusting.
 skl.bin: skl Makefile
-	objcopy -O binary -S -R '.note.*' $< $@
+	objcopy -O binary -S -R '.note.*' -R '.got.plt' $< $@
 	@./sanity_check.sh
 
 skl: link.lds $(OBJ) Makefile
