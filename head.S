@@ -85,18 +85,6 @@ GLOBAL(_entry)
 	and	$~(VM_CR_DIS_A20M), %eax
 	wrmsr
 
-	/* Relocate GDT.base, 64bit ljmp offset, and pagetables. */
-	add	%ebp, 2 + gdtr(%ebp)
-#ifdef __x86_64__
-	add	%ebp, 1 + .Ljump64(%ebp)
-	add	%ebp,        l4_identmap(%ebp) /* L4[0] => L3        */
-	add	%ebp,        l3_identmap(%ebp) /* L3[0] => First  L2 */
-	add	%ebp, 0x08 + l3_identmap(%ebp) /* L3[1] => Second L2 */
-	add	%ebp, 0x10 + l3_identmap(%ebp) /* L3[2] => Third  L2 */
-	add	%ebp, 0x18 + l3_identmap(%ebp) /* L3[3] => Fourth L2 */
-	add	%ebp,        l2_identmap(%ebp) /* L2[0] => L1        */
-#endif
-
 	/* Load GDT */
 	lgdt	gdtr(%ebp)
 
@@ -115,6 +103,60 @@ GLOBAL(_entry)
 	rep stosl
 
 #ifdef __x86_64__
+	/* Relocate 64bit ljmp offset and build pagetables. */
+	/* FIXME: self-modifying code can't be self-measuring! */
+	add	%ebp, 1 + .Ljump64(%ebp)
+
+	/*
+	 * Pagetables are located in .bss that was just cleared, and we are
+	 * loaded to <4GB memory, so we don't have to bother with writing to
+	 * higher dword of each entry.
+	 */
+	/* 1x L1 page, 512 entries mapping total of 2M. */
+	lea	l1_identmap(%ebp), %edi
+	mov	$512, %ecx
+	mov	$(_PAGE_AD + _PAGE_RW + _PAGE_PRESENT + 512 * PAGE_SIZE), %edx
+.Lfill_l1_identmap:
+	sub	$PAGE_SIZE, %edx
+	/* Loop runs for ecx=[512..1] for entries [511..0], hence -8. */
+	mov	%edx, -8(%edi,%ecx,8)
+	loop	.Lfill_l1_identmap
+
+	/* 4x L2 pages, each page mapping 1G of RAM. */
+	lea	l2_identmap(%ebp), %edi
+	/* 1st entry points to L1. */
+	lea	(l1_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+	mov	%edx, (%edi)
+	/* Other entries are 2MB pages. */
+	mov	$(4 * 512 - 1), %ecx
+	/*
+	 * XXX: Value below should be 4GB + flags, which wouldn't fit in 32b
+	 * register. To avoid warning from the assembler, 4GB is skipped here.
+	 * Substitution in first iteration makes the value roll over and point
+	 * to 4GB - 2MB + flags.
+	 */
+	mov	$(_PAGE_PSE + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT), %edx
+.Lfill_l2_identmap:
+	sub	$(1 << L2_PT_SHIFT), %edx
+	/* Loop runs for ecx=[2047..1] for entries [2047..1]. */
+	mov	%edx, (%edi,%ecx,8)
+	loop	.Lfill_l2_identmap
+
+	/* 1x L3 page, mapping the 4x L2 pages. */
+	lea	l3_identmap(%ebp), %edi
+	mov	$4, %ecx
+	lea	(l2_identmap + 4 * PAGE_SIZE \
+	         + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+.Lfill_l3_identmap:
+	sub	$PAGE_SIZE, %edx
+	/* Loop runs for ecx=[4..1] for entries [3..0], hence -8. */
+	mov	%edx, -8(%edi,%ecx,8)
+	loop	.Lfill_l3_identmap
+
+	/* 1x L4 page, mapping the L3 page. */
+	lea	(l3_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+	mov	%edx, l4_identmap(%ebp)
+
 	/* Restore CR4, PAE must be enabled before IA-32e mode */
 	mov	%cr4, %ecx
 	or	$CR4_PAE, %ecx
@@ -250,40 +292,25 @@ ENDDATA(gdtr)
 .Lgdt_end:
 ENDDATA(gdt)
 
-.section .page_data, "a", @progbits
-.align PAGE_SIZE
 #ifdef __x86_64__
 	/* 64bit Pagetables, identity map of the first 4G of RAM. */
+	.section .bss.page_data, "aw", @nobits
+.align PAGE_SIZE
 
-l1_identmap: /* 1x L1 page, mapping 2M of RAM.  No relocations. */
-	idx = 0
-	.rept 512
-	.quad (idx << L1_PT_SHIFT) + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
+l1_identmap: /* 1x L1 page, mapping 2M of RAM. */
+.skip PAGE_SIZE
 ENDDATA(l1_identmap)
 
-l2_identmap: /* 4x L2 pages, each mapping 1G of RAM.  1 relocation. */
-	.quad l1_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = 1
-	.rept (512 * 4) - 1
-	.quad (idx << L2_PT_SHIFT) + _PAGE_PSE + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
+l2_identmap: /* 4x L2 pages, each mapping 1G of RAM. */
+.skip 4 * PAGE_SIZE
 ENDDATA(l2_identmap)
 
-l3_identmap: /* 1x L3 page, mapping the 4x L2 pages.  4 relocations. */
-	idx = 0
-	.rept 4
-	.quad l2_identmap + (idx * PAGE_SIZE) + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
-	.align PAGE_SIZE
+l3_identmap: /* 1x L3 page, mapping the 4x L2 pages. */
+.skip PAGE_SIZE
 ENDDATA(l3_identmap)
 
-l4_identmap: /* 1x L4 page, mapping the L3 page. 1 relocation. */
-	.quad l3_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	.align PAGE_SIZE
+l4_identmap: /* 1x L4 page, mapping the L3 page. */
+.skip PAGE_SIZE
 ENDDATA(l4_identmap)
 #endif
 
