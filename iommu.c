@@ -21,11 +21,7 @@
 #include <iommu.h>
 #include <printk.h>
 
-iommu_dte_t device_table[2 * PAGE_SIZE / sizeof(iommu_dte_t)] __page_data = {
-    [0 ... ARRAY_SIZE(device_table) - 1 ] = {
-        .a = IOMMU_DTE_Q0_V + IOMMU_DTE_Q0_TV,
-    },
-};
+iommu_dte_t device_table[2 * PAGE_SIZE / sizeof(iommu_dte_t)] __page_data;
 iommu_command_t command_buf[2] __aligned(sizeof(iommu_command_t));
 char event_log[PAGE_SIZE] __page_data;
 
@@ -46,8 +42,11 @@ static void send_command(u64 *mmio_base, iommu_command_t cmd, u32 *idx)
 u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
 {
     u64 *mmio_base;
-    u32 low, hi, idx = 0;
+    u32 low, hi, i, idx = 0;
     iommu_command_t cmd = {0};
+
+    for (i = 0; i < ARRAY_SIZE(device_table); i++)
+        device_table[i].a = IOMMU_DTE_Q0_V + IOMMU_DTE_Q0_TV;
 
     pci_read(0, IOMMU_PCI_BUS,
              PCI_DEVFN(IOMMU_PCI_DEVICE, IOMMU_PCI_FUNCTION),

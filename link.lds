@@ -37,16 +37,16 @@ SECTIONS
 		*(SORT_BY_ALIGNMENT(.data*))
 	}
 	.bss : {
+		. = ALIGN(4096);
+		_bss = .;
+		/*
+		 * Due to the 64k total size constraint, we link all page size/aligned
+		 * data together in a single section, to avoid wasting space in the
+		 * individual data/bss sections.
+		 */
 		*(SORT_BY_ALIGNMENT(.bss*))
-	}
-
-	/*
-	 * Due to the 64k total size constraint, we link all page size/aligned
-	 * data together in a single section, to avoid wasting space in the
-	 * individual data/bss sections.
-	 */
-	.page_data : {
-		*(.page_data)
+		. = ALIGN(4);
+		_ebss = .;
 	}
 
 	.skl_info : {
