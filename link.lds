@@ -31,7 +31,23 @@ SECTIONS
 	}
 	.rodata : {
 		*(SORT_BY_ALIGNMENT(.rodata*))
+		/*
+		 * This is unwritten (as of AMD APM revision 3.42) behavior of SKINIT.
+		 * PCR 17 is extended with SKL padded with zeros up to a size that is
+		 * aligned up to the multiply of 4B. To keep functions in util.sh
+		 * simple, _end_of_measured is explicitly aligned. This may increase
+		 * skl.bin size by up to 3 bytes, but since next section is aligned to
+		 * 4K anyway this doesn't reduce the amount of available space, neither
+		 * does it increase the real size of data sent to TPM to be measured.
+		 *
+		 * Note that this padding must be part of .rodata to be included in
+		 * skl.bin, both for 'dd' used in util.sh and for checks performed by
+		 * GRUB.
+		 */
+		. = ALIGN(4);
 	}
+
+	_end_of_measured = .;
 
 	.bss : {
 		. = ALIGN(4096);
@@ -39,25 +55,20 @@ SECTIONS
 		/*
 		 * Due to the 64k total size constraint, we link all page size/aligned
 		 * data together in a single section, to avoid wasting space in the
-		 * individual data/bss sections.
+		 * individual bss sections.
 		 */
 		*(SORT_BY_ALIGNMENT(.bss*))
 		. = ALIGN(4);
 		_ebss = .;
 	}
 
-	.skl_info : {
-		*(.skl_info)
-	}
-
-	. = ALIGN(8);
-
 	/*
-	 * Bootloader must pass non-constant data (e.g. address of zeropage). Keep
+	 * Bootloader must pass non-constant data (e.g. address of kernel). Keep
 	 * it in separate section, outside of measured part of SL. This must be
 	 * done in order to keep hashes constant, it also allows us to measure SL
 	 * offline.
 	 */
+	. = ALIGN(4);
 	.bootloader_data : {
 		*(.bootloader_data)
 	}

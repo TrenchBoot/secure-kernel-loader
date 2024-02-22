@@ -33,8 +33,9 @@
 
 GLOBAL(sl_header)
 	.word	_entry           /* SL header SKL offset to code start */
-	.word	bootloader_data  /* SL header SKL measured length */
-	.word	skl_info
+	.word	_end_of_measured /* SL header SKL measured length */
+	.word	skl_info         /* Offset to SKL info with UUID and version */
+	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 ENDDATA(sl_header)
 
 	.text
