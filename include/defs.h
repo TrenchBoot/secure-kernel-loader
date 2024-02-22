@@ -27,7 +27,8 @@
 #define SIMPLE_PAYLOAD  1
 #define MULTIBOOT2      2
 
-#define STACK_CANARY    0xDEADBEEF
+/* Update if code changes significantly. */
+#define MAX_STACK_SIZE  0x280
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT)

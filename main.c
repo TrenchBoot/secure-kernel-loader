@@ -537,12 +537,6 @@ asm_return_t skl_main(void)
                 ((struct skl_tag_evtlog *)t)->size);
     }
 
-    if ( skl_stack_canary != STACK_CANARY )
-    {
-        print("Stack is too small, possible corruption\n");
-        reboot();
-    }
-
     print("skl_main() is about to exit\n");
 
     return ret;
