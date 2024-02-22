@@ -77,7 +77,6 @@ GLOBAL(_entry)
 	push	$0
 	push	$0
 	lidt	(%esp)
-	add	$8, %esp
 
 	/* Clear DIS_A20M. R_INIT is cleared by the kernel. */
 	mov	$IA32_VM_CR, %ecx
@@ -86,7 +85,11 @@ GLOBAL(_entry)
 	wrmsr
 
 	/* Load GDT */
-	lgdt	gdtr(%ebp)
+	movl	$gdt, 4(%esp)			/* Base ... */
+	add	%ebp, 4(%esp)			/* ... relocated */
+	movw	$(.Lgdt_end - gdt - 1), 2(%esp)	/* Limit */
+	lgdt	2(%esp)
+	add	$8, %esp
 
 	/* Load data segment regs.  %ss is already flat and matches DS_SEL. */
 	mov	$DS_SEL, %eax
@@ -255,17 +258,13 @@ simple_payload:
 	jmp	*%ebx
 ENDFUNC(_entry)
 
-	.data
-
+	.section .rodata, "a", @progbits
 .align 8
 gdt:
-	/* Null Segment. Reused for 32bit GDTR */
-	.word   0
-gdtr:
-	.word	.Lgdt_end - gdt - 1 /* Limit */
-	.long	gdt                 /* Base - dynamically relocated. */
-ENDDATA(gdtr)
-
+	/* Null Segment */
+	.word	0
+	.word	0
+	.long	0
 	/* 32b Code Segment */
 	.word	0xffff /* Limit 1 */
 	.word	0x0000 /* Base 1 */
@@ -314,6 +313,8 @@ l4_identmap: /* 1x L4 page, mapping the L3 page. */
 ENDDATA(l4_identmap)
 #endif
 
-	.section .bootloader_data, "a", @progbits
+	.section .bootloader_data, "a", @nobits
 GLOBAL(bootloader_data)
-	.word	0			/* Dummy data to make sure that file isn't truncated */
+
+/* Avoids "missing .note.GNU-stack section implies executable stack" warning. */
+	.section .note.GNU-stack

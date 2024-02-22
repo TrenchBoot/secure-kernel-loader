@@ -35,14 +35,12 @@
 
 u32 boot_protocol;
 
-skl_info_t __section(".skl_info") __used skl_info = {
+const skl_info_t __used skl_info = {
     .uuid = {
         0x78, 0xf1, 0x26, 0x8e, 0x04, 0x92, 0x11, 0xe9,
         0x83, 0x2a, 0xc8, 0x5b, 0x76, 0xc4, 0xcc, 0x02,
     },
     .version = 0,
-    .msb_key_algo = 0x14,
-    .msb_key_hash = { 0 },
 };
 
 static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)

@@ -52,10 +52,8 @@ extern sl_header_t sl_header;
 typedef struct __packed skl_info {
     u8  uuid[16]; /* 78 f1 26 8e 04 92 11 e9  83 2a c8 5b 76 c4 cc 02 */
     u32 version;
-    u16 msb_key_algo;
-    u8  msb_key_hash[64]; /* Support up to SHA512 */
 } skl_info_t;
-extern skl_info_t skl_info;
+extern const skl_info_t skl_info;
 
 /* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
 typedef struct __packed ev_log_hash {

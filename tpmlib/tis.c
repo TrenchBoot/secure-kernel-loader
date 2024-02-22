@@ -30,7 +30,7 @@
 
 #define TPM_BURST_MIN_DELAY 100 /* 100us */
 
-static u8 locality = TPM_NO_LOCALITY;
+static u8 locality;
 
 static u32 burst_wait(void)
 {

@@ -29,13 +29,10 @@ SECTIONS
 		*(.headers)
 		*(.text*)
 	}
-	. = ALIGN(64);
 	.rodata : {
 		*(SORT_BY_ALIGNMENT(.rodata*))
 	}
-	.data : {
-		*(SORT_BY_ALIGNMENT(.data*))
-	}
+
 	.bss : {
 		. = ALIGN(4096);
 		_bss = .;
@@ -77,6 +74,15 @@ SECTIONS
 		*(.got.plt)
 	}
 
+	/*
+	 * This section is expected to be empty. To keep amount of data sent to the
+	 * TPM by SKINIT instruction low, all data is either read-only (.rodata), or
+	 * uninitialized and built at run time (.bss).
+	 */
+	.data : {
+		*(.data*)
+	}
+
 	/DISCARD/ : {
 		*(.eh_frame*)
 	}
@@ -84,6 +90,7 @@ SECTIONS
 
 ASSERT(_end <= 0x10000, "Landing Zone exceeds 64k");
 ASSERT(SIZEOF(.got) == 0, ".got section not empty - non-hidden symbols used?");
+ASSERT(SIZEOF(.data) == 0, ".data section not empty - initialized data used?");
 
 /*
  * At least GNU ld 2.30 and earlier fail to discard the generic part of
