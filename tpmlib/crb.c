@@ -36,7 +36,7 @@
 
 #define REGISTER(l, r)		(((l) << 12) | (r))
 
-static u8 locality = TPM_NO_LOCALITY;
+static u8 locality;
 
 struct tpm_loc_state {
 	union {
@@ -284,6 +284,8 @@ size_t crb_recv(__attribute__((unused)) enum tpm_family family,
 u8 crb_init(struct tpm *t)
 {
 	struct tpm_crb_intf_id_ext id;
+
+	locality = TPM_NO_LOCALITY;
 
 	if (crb_request_locality(0) == TPM_NO_LOCALITY)
 		return 0;

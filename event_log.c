@@ -118,7 +118,7 @@ typedef struct __packed {
     /* u8 event[]; */
 } tpm20_event_t;
 
-static tpm12_spec_id_ev_t tpm12_id_struct = {
+static const tpm12_spec_id_ev_t tpm12_id_struct = {
     .c.signature = "Spec ID Event00",
     .c.spec_ver_minor = 2,
     .c.spec_ver_major = 1,
@@ -139,7 +139,7 @@ static tpm12_spec_id_ev_t tpm12_id_struct = {
     .hdr.next_event_offset = sizeof(tpm12_event_log_header)
 };
 
-static tpm20_spec_id_ev_t tpm20_id_struct = {
+static const tpm20_spec_id_ev_t tpm20_id_struct = {
     .c.signature = "Spec ID Event03",
     .c.spec_ver_minor = 0,
     .c.spec_ver_major = 2,
@@ -245,11 +245,6 @@ int event_log_init(struct tpm *tpm)
     if ( !(_p(limit) < _p(_start) || _p(_start + SLB_SIZE) < _p(ptr_current)) )
         goto err;
 
-    tpm12_id_struct.hdr.container_size =
-            tpm20_id_struct.el.allocated_event_container_size =
-            t->size;
-    tpm20_id_struct.el.phys_addr = _u(evtlog_base);
-
     memset(ptr_current, 0, t->size);
 
     /* Write log header */
@@ -267,10 +262,17 @@ int event_log_init(struct tpm *tpm)
         log_write(&ev, sizeof(ev));
     }
 
-    if ( tpm->family == TPM12 )
+    /* Sizes were checked earlier so log_write() won't fail here */
+    if ( tpm->family == TPM12 ) {
+        tpm12_spec_id_ev_t *id = (tpm12_spec_id_ev_t *)ptr_current;
         log_write(&tpm12_id_struct, sizeof(tpm12_id_struct));
-    else
+        id->hdr.container_size = t->size;
+    } else {
+        tpm20_spec_id_ev_t *id = (tpm20_spec_id_ev_t *)ptr_current;
         log_write(&tpm20_id_struct, sizeof(tpm20_id_struct));
+        id->el.allocated_event_container_size = t->size;
+        id->el.phys_addr = _u(evtlog_base);
+    }
 
     /* Log what was done by SKINIT */
     if ( tpm->family == TPM12 )
