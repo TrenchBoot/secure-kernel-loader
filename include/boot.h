@@ -40,7 +40,6 @@
 #define __BOOT_H__
 
 extern const char _start[];
-extern volatile u32 skl_stack_canary;
 
 typedef struct __packed sl_header {
     u16 skl_entry_point;
