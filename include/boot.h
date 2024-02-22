@@ -43,8 +43,9 @@ extern const char _start[];
 
 typedef struct __packed sl_header {
     u16 skl_entry_point;
-    u16 bootloader_data_offset;
+    u16 skl_measured_size;
     u16 skl_info_offset;
+    u16 bootloader_data_offset;
 } sl_header_t;
 extern sl_header_t sl_header;
 
