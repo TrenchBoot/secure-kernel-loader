@@ -23,10 +23,6 @@
  */
 #pragma GCC visibility push(hidden)
 
-#define LINUX_BOOT      0
-#define SIMPLE_PAYLOAD  1
-#define MULTIBOOT2      2
-
 /* Update if code changes significantly. */
 #define MAX_STACK_SIZE  0x280
 
