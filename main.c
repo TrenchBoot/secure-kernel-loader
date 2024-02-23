@@ -33,8 +33,6 @@
 #include <printk.h>
 #include <dev.h>
 
-u32 boot_protocol;
-
 const skl_info_t __used skl_info = {
     .uuid = {
         0x78, 0xf1, 0x26, 0x8e, 0x04, 0x92, 0x11, 0xe9,
@@ -438,16 +436,12 @@ static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl
         reboot();
     }
 
-    boot_protocol = MULTIBOOT2;
-
     return (asm_return_t){ kernel_entry, _p(skl_tag->mbi) };
 }
 
 static asm_return_t skl_simple_payload(struct tpm *tpm, struct skl_tag_boot_simple_payload *skl_tag)
 {
     extend_pcr(tpm, _p(skl_tag->base), skl_tag->size, 17, "Measured payload into PCR17");
-
-    boot_protocol = SIMPLE_PAYLOAD;
 
     return (asm_return_t){ _p(skl_tag->entry), _p(skl_tag->arg) };
 }
