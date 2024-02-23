@@ -274,8 +274,8 @@ static void iommu_setup(void)
  * convenient for our asm caller to deal with.
  */
 typedef struct {
-    void *pm_kernel_entry; /* %eax */
-    void *zero_page;       /* %edx */
+    void *dlme_entry;   /* %eax */
+    void *dlme_arg;     /* %edx */
 } asm_return_t;
 
 static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_tag)
@@ -283,7 +283,7 @@ static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_ta
     struct boot_params *bp;
     struct kernel_info *ki;
     struct mle_header *mle_header;
-    void *pm_kernel_entry;
+    void *dlme_entry;
 
     /* The Zero Page with the boot_params and legacy header */
     bp = _p(skl_tag->zero_page);
@@ -307,9 +307,9 @@ static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_ta
     print("\nmle_header\n");
     hexdump(mle_header, sizeof(struct mle_header));
 
-    pm_kernel_entry = get_kernel_entry(bp, mle_header);
+    dlme_entry = get_kernel_entry(bp, mle_header);
 
-    if ( pm_kernel_entry == NULL )
+    if ( dlme_entry == NULL )
     {
         print("\nBad kernel entry in MLE header.\n");
         reboot();
@@ -323,9 +323,9 @@ static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_ta
     free_tpm(tpm);
 
     /* End of the line, off to the protected mode entry into the kernel */
-    print("pm_kernel_entry:\n");
-    hexdump(pm_kernel_entry, 0x100);
-    print("zero_page:\n");
+    print("dlme_entry:\n");
+    hexdump(dlme_entry, 0x100);
+    print("dlme_arg:\n");
     hexdump(bp, 0x280);
     print("skl_base:\n");
     hexdump(_start, 0x100);
@@ -338,7 +338,7 @@ static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_ta
 
     print("skl_main() is about to exit\n");
 
-    return (asm_return_t){ pm_kernel_entry, bp };
+    return (asm_return_t){ dlme_entry, bp };
 }
 
 static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl_tag)
@@ -520,10 +520,10 @@ asm_return_t skl_main(void)
     free_tpm(tpm);
 
     /* End of the line, off to the protected mode entry into the kernel */
-    print("pm_kernel_entry:\n");
-    hexdump(ret.pm_kernel_entry, 0x100);
-    print("zero_page:\n");
-    hexdump(ret.zero_page, 0x280);
+    print("dlme_entry:\n");
+    hexdump(ret.dlme_entry, 0x100);
+    print("dlme_arg:\n");
+    hexdump(ret.dlme_arg, 0x280);
     print("skl_base:\n");
     hexdump(_start, 0x100);
     print("bootloader_data:\n");
