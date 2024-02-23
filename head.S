@@ -195,13 +195,12 @@ GLOBAL(_entry)
 	 * skl_main() is magic.  It returns two pointers by register:
 	 *
 	 * %eax - protected mode kernel entry
-	 * %edx - ZP base
+	 * %edx - argument for kernel entry point, depends on type of kernel
 	 *
-	 * We stash the entry point in %ebx and the Zero Page pointer in %esi.
-	 * This both protects them from clobbering during teardown, and
-	 * matches the ABI for entering Linux.
+	 * We stash the entry point in %edi and the argument in %esi to protect
+	 * them from clobbering during teardown.
 	 */
-	mov	%eax, %ebx
+	mov	%eax, %edi
 	mov	%edx, %esi
 
 #ifdef __x86_64__
@@ -235,28 +234,28 @@ GLOBAL(_entry)
 	push	$0
 	popf
 
-	mov	boot_protocol(%ebp), %edx
-	cmp	$MULTIBOOT2, %edx
-	je	multiboot2_kernel
-
-	cmp	$SIMPLE_PAYLOAD, %edx
-	je	simple_payload
-
-	/* Jump to entry target - EBX: startup_32, ESI: ZP base, EDX: SKL base */
-	mov	%ebp, %edx
-	jmp	*%ebx
-
-multiboot2_kernel:
-	/* Jump to entry target - EBX: MBI pointer, EAX: Multiboot2 magic number */
-	xchg	%esi, %ebx
+	/*
+	 * Various kernels use different boot protocols, SKL supports some of
+	 * the common ones. Because of that, we are saving the same argument in
+	 * every possible place that any of the supported kernel types may look
+	 * for it. As of now, supported protocols include:
+	 *
+	 * - Linux x86 protected mode entry, not UEFI
+	 * - Multiboot2, also not UEFI
+	 * - simple payload started as 'entry(u32 arg)' function call. As we
+	 *   don't expect it to return, __cdecl, __stdcall and __pascal calling
+	 *   conventions work the same.
+	 */
+	/* Linux expects Zero Page address in %esi, it is already there */
+	/* Multiboot2 expects MBI address in %ebx and magic number in %eax */
+	mov	%esi, %ebx
 	mov	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
-	jmp *%esi
-
-simple_payload:
-	/* Jump to entry target - argument and dummy return address on stack */
+	/* Simple payload expects argument on stack followed by return address */
 	push	%esi
 	push	$0
-	jmp	*%ebx
+
+	/* All set, jump to the kernel */
+	jmp	*%edi
 ENDFUNC(_entry)
 
 	.section .rodata, "a", @progbits
