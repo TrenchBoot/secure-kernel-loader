@@ -40,6 +40,7 @@
 #define __BOOT_H__
 
 extern const char _start[];
+extern const char _end_of_measured[];
 
 typedef struct __packed sl_header {
     u16 skl_entry_point;
