@@ -109,10 +109,6 @@ GLOBAL(_entry)
 	rep stosl
 
 #ifdef __x86_64__
-	/* Relocate 64bit ljmp offset and build pagetables. */
-	/* FIXME: self-modifying code can't be self-measuring! */
-	add	%ebp, 1 + .Ljump64(%ebp)
-
 	/*
 	 * Pagetables are located in .bss that was just cleared, and we are
 	 * loaded to <4GB memory, so we don't have to bother with writing to
@@ -182,9 +178,11 @@ GLOBAL(_entry)
 	or	$CR0_PG | CR0_NE | CR0_TS | CR0_MP, %eax
 	mov	%eax, %cr0
 
-	/* Now in IA-32e compatibility mode, ljmp to 64b mode */
-.Ljump64:
-        ljmp	$CS_SEL64, $1f /* Offset - dynamically relocated. */
+	/* Now in IA-32e compatibility mode, use lret to jump to 64b mode */
+	lea	1f(%ebp), %ecx
+	push	$CS_SEL64
+	push	%ecx
+	lret
 
 	.code64
 
