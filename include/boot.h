@@ -56,15 +56,6 @@ typedef struct __packed skl_info {
 } skl_info_t;
 extern const skl_info_t skl_info;
 
-/* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
-typedef struct __packed ev_log_hash {
-    u32 count;
-    u16 sha1_id;
-    u8 sha1_hash[20];
-    u16 sha256_id;
-    u8 sha256_hash[32];
-} ev_log_hash_t;
-
 /* Fences */
 #define mb()        asm volatile("mfence" : : : "memory")
 #define rmb()       asm volatile("lfence" : : : "memory")
