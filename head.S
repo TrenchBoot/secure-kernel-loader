@@ -20,7 +20,6 @@
  */
 
 #include <defs.h>
-#include <multiboot2.h>
 
 /* Selectors, CS and SS compatible with initial state after SKINIT */
 #define CS_SEL32         0x0008
