@@ -28,7 +28,7 @@
 #include <linux-bootparams.h>
 #include <event_log.h>
 #include <multiboot2.h>
-#include <tags.h>
+#include <slrt.h>
 #include <string.h>
 #include <printk.h>
 #include <dev.h>
@@ -276,181 +276,12 @@ typedef struct {
     void *dlme_arg;     /* %edx */
 } asm_return_t;
 
-static asm_return_t skl_linux(struct tpm *tpm, struct skl_tag_boot_linux *skl_tag)
-{
-    struct boot_params *bp;
-    struct kernel_info *ki;
-    struct mle_header *mle_header;
-    void *dlme_entry;
-
-    /* The Zero Page with the boot_params and legacy header */
-    bp = _p(skl_tag->zero_page);
-
-    print("\ncode32_start ");
-    print_p(_p(bp->code32_start));
-
-    if ( bp->version                            < 0x020f
-         || (ki = get_kernel_info(bp))         == NULL
-         || ki->header                         != KERNEL_INFO_HEADER
-         || (mle_header = get_mle_hdr(bp, ki)) == NULL
-         || mle_header->uuid[0]                != MLE_UUID0
-         || mle_header->uuid[1]                != MLE_UUID1
-         || mle_header->uuid[2]                != MLE_UUID2
-         || mle_header->uuid[3]                != MLE_UUID3 )
-    {
-        print("\nKernel is too old or MLE header not present.\n");
-        reboot();
-    }
-
-    print("\nmle_header\n");
-    hexdump(mle_header, sizeof(struct mle_header));
-
-    dlme_entry = get_kernel_entry(bp, mle_header);
-
-    if ( dlme_entry == NULL )
-    {
-        print("\nBad kernel entry in MLE header.\n");
-        reboot();
-    }
-
-    /* extend TB Loader code segment into PCR17 */
-    extend_pcr(tpm, _p(bp->code32_start), bp->syssize << 4, 17,
-               "Measured Kernel into PCR17");
-
-    tpm_relinquish_locality(tpm);
-    free_tpm(tpm);
-
-    /* End of the line, off to the protected mode entry into the kernel */
-    print("dlme_entry:\n");
-    hexdump(dlme_entry, 0x100);
-    print("dlme_arg:\n");
-    hexdump(bp, 0x280);
-    print("skl_base:\n");
-    hexdump(_start, 0x100);
-    print("device_table:\n");
-    hexdump(device_table, 0x100);
-    print("command_buf:\n");
-    hexdump(command_buf, 0x1000);
-    print("event_log:\n");
-    hexdump(event_log, 0x1000);
-
-    print("skl_main() is about to exit\n");
-
-    return (asm_return_t){ dlme_entry, bp };
-}
-
-static asm_return_t skl_multiboot2(struct tpm *tpm, struct skl_tag_boot_mb2 *skl_tag)
-{
-    void *kernel_entry;
-    u32 kernel_size, mbi_len;
-    struct multiboot_tag *tag;
-    int i;
-
-    /* This is MBI header, not a tag, but their structures are similar enough.
-     * Note that 'size' offsets are reversed in those two! */
-    tag = _p(skl_tag->mbi);
-
-    /* skl_tag->kernel_size is either passed size of kernel from bootloader
-     * or 0 */
-    kernel_size = skl_tag->kernel_size;
-    kernel_entry = _p(skl_tag->kernel_entry);
-
-    /* Extend PCR18 with MBI structure's hash; this includes all cmdlines.
-     * Use 'type' and not 'size', as their offsets are swapped in the header! */
-    mbi_len = tag->type;
-    extend_pcr(tpm, &tag, mbi_len, 18, "Measured MBI into PCR18");
-
-    tag++;
-
-    while ( tag->type )
-    {
-        if ( kernel_entry && kernel_size )
-            break;
-
-        /* If the entry point wasn't passed by a bootloader, we can only assume
-         * that it starts at the kernel base address (true at least for Xen) */
-        if ( !kernel_entry && tag->type == MULTIBOOT_TAG_TYPE_LOAD_BASE_ADDR )
-        {
-            struct multiboot_tag_load_base_addr *ba = (void *)tag;
-            kernel_entry = _p(ba->load_base_addr);
-            print("kernel_entry ");
-            print_p(kernel_entry);
-            print("\n");
-        }
-
-        /* This assumes that ELF has only one PROGBITS section, and that section
-         * is the first one (i.e. it is loaded at load_base_addr). It is true
-         * for Xen, but may not always the case.
-         *
-         * Also, GRUB2 creates this tag after all module tags, so separate loop
-         * is needed for consistent order of PCR extension operations. */
-        if ( !kernel_size && tag->type == MULTIBOOT_TAG_TYPE_ELF_SECTIONS )
-        {
-            struct multiboot_tag_elf_sections *es_tag = (void *)tag;
-            for ( i = 0; i < es_tag->num; i++ )
-            {
-                Elf32_Shdr *sh = (void *)&es_tag->sections[es_tag->entsize * i];
-                if ( sh->sh_type == SHT_PROGBITS )
-                {
-                    kernel_size = sh->sh_size;
-                    print("kernel_size ");
-                    print_p(_p(kernel_size));
-                    print("\n");
-                    break;
-                }
-            }
-        }
-
-        tag = multiboot_next_tag(tag);
-    }
-
-    extend_pcr(tpm, kernel_entry, kernel_size, 17,
-               "Measured Kernel into PCR17");
-
-    tag = _p(skl_tag->mbi);
-    tag++;
-
-    while ( tag->type )
-    {
-        if ( tag->type == MULTIBOOT_TAG_TYPE_MODULE )
-        {
-            struct multiboot_tag_module *mod = (void *)tag;
-            print("Module '");
-            print(mod->cmdline);
-            print("' [");
-            print_p(_p(mod->mod_start));
-            print_p(_p(mod->mod_end));
-            print("]\n");
-            extend_pcr(tpm, _p(mod->mod_start), mod->mod_end - mod->mod_start,
-                       17, mod->cmdline);
-        }
-
-        tag = multiboot_next_tag(tag);
-    }
-
-    /* Safety checks */
-    if ( tag->size != 8
-         || _p(multiboot_next_tag(tag)) > _p(skl_tag->mbi) + mbi_len )
-    {
-        print("MBI safety checks failed\n");
-        reboot();
-    }
-
-    return (asm_return_t){ kernel_entry, _p(skl_tag->mbi) };
-}
-
-static asm_return_t skl_simple_payload(struct tpm *tpm, struct skl_tag_boot_simple_payload *skl_tag)
-{
-    extend_pcr(tpm, _p(skl_tag->base), skl_tag->size, 17, "Measured payload into PCR17");
-
-    return (asm_return_t){ _p(skl_tag->entry), _p(skl_tag->arg) };
-}
-
 asm_return_t skl_main(void)
 {
-    asm_return_t ret;
     struct tpm *tpm;
-    struct skl_tag_hdr *t = (struct skl_tag_hdr*) &bootloader_data;
+    struct slr_entry_dl_info *dl_info;
+    asm_return_t ret;
+    u32 entry_offset;
 
     /*
      * Now in 64b mode, paging is setup. This is the launching point. We can
@@ -464,16 +295,6 @@ asm_return_t skl_main(void)
     /* Disable memory protection and setup IOMMU */
     iommu_setup();
 
-    if ( t->type                              != SKL_TAG_TAGS_SIZE
-         || t->len                            != sizeof(struct skl_tag_tags_size)
-         || end_of_tags()                      > _p(_start + SLB_SIZE)
-         || (t = next_of_type(t, SKL_TAG_END)) == NULL
-         || _p(t) + t->len                    != end_of_tags())
-    {
-        print("Bad bootloader data format\n");
-        reboot();
-    }
-
     /*
      * TODO Note these functions can fail but there is no clear way to
      * report the error unless SKINIT has some resource to do this. For
@@ -483,35 +304,38 @@ asm_return_t skl_main(void)
     tpm_request_locality(tpm, 2);
     event_log_init(tpm);
 
-    /* Now that we have TPM and event log, measure bootloader data */
-    extend_pcr(tpm, &bootloader_data, bootloader_data.size, 18,
-               "Measured bootloader data into PCR18");
+    /*
+     * Now that we have TPM and event log, we can begin measuring. For parity
+     * with what TXT does, we leave most of measuring for the DLME. Here, we
+     * only have to measure DLME itself, as well as entry point offset - only
+     * both of those measurements together tell that the proper code has been
+     * started. Entry point offset may come from MLE header included in DLME,
+     * but we can't trust that the bootloader passed it without modification.
+     */
+    dl_info = next_entry_with_tag(NULL, SLR_ENTRY_DL_INFO);
 
-    t = next_of_class(&bootloader_data, SKL_TAG_BOOT_CLASS);
-    if ( t == NULL || next_of_class(t, SKL_TAG_BOOT_CLASS) != NULL )
+    if ( dl_info                                     == NULL
+         || dl_info->hdr.size                        != sizeof(*dl_info)
+         || end_of_slrt()                             < _p(&dl_info[1])
+         || dl_info->dlme_base                       >= 0x100000000ULL
+         || dl_info->dlme_base + dl_info->dlme_size  >= 0x100000000ULL
+         || dl_info->dlme_entry                      >= dl_info->dlme_size
+         || dl_info->bl_context.bootloader           != SLR_BOOTLOADER_GRUB )
     {
-        print("No boot tag or multiple boot tags\n");
+        print("Bad bootloader data format\n");
         reboot();
     }
 
-    switch( t->type )
-    {
-    case SKL_TAG_BOOT_LINUX:
-        ret = skl_linux(tpm, (struct skl_tag_boot_linux *)t);
-        break;
-    case SKL_TAG_BOOT_MB2:
-        ret = skl_multiboot2(tpm, (struct skl_tag_boot_mb2 *)t);
-        break;
-    case SKL_TAG_BOOT_SIMPLE:
-        ret = skl_simple_payload(tpm, (struct skl_tag_boot_simple_payload *)t);
-        break;
-    default:
-        print("Unknown kernel boot protocol\n");
-        reboot();
-    }
+    entry_offset = dl_info->dlme_entry;
+    extend_pcr(tpm, &entry_offset, sizeof(entry_offset), 17,
+               "DLME entry offset");
+    extend_pcr(tpm, _p(dl_info->dlme_base), dl_info->dlme_size, 17, "DLME");
 
     tpm_relinquish_locality(tpm);
     free_tpm(tpm);
+
+    ret.dlme_entry = _p(dl_info->dlme_base + dl_info->dlme_entry);
+    ret.dlme_arg = _p(dl_info->bl_context.context);
 
     /* End of the line, off to the protected mode entry into the kernel */
     print("dlme_entry:\n");
@@ -522,14 +346,6 @@ asm_return_t skl_main(void)
     hexdump(_start, 0x100);
     print("bootloader_data:\n");
     hexdump(&bootloader_data, bootloader_data.size);
-
-    t = next_of_type(&bootloader_data, SKL_TAG_EVENT_LOG);
-    if ( t != NULL )
-    {
-        print("TPM event log:\n");
-        hexdump(_p(((struct skl_tag_evtlog *)t)->address),
-                ((struct skl_tag_evtlog *)t)->size);
-    }
 
     print("skl_main() is about to exit\n");
 

@@ -61,8 +61,7 @@ GLOBAL(_entry)
 
 	/* Check if we have enough space available for stack. */
 	lea	bootloader_data(%ebp), %ebx
-	/* TODO: below uses bootloader_data.size, must be changed for SLRT. */
-	movzwl	%ss:2(%ebx), %edx
+	mov	%ss:8(%ebx), %edx       /* bootloader_data.size */
 	add	%edx, %ebx
 	add	$MAX_STACK_SIZE, %ebx
 	cmp	%ebx, %esp
