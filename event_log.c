@@ -107,15 +107,24 @@ typedef struct __packed {
 typedef struct __packed {
     u32 pcr;
     u32 event_type;
-    u8  digest[20];
+    u8  digest[SHA1_DIGEST_SIZE];
     u32 event_size;
     /* u8 event[]; */
 } tpm12_event_t;
 
+/* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
+typedef struct __packed {
+    u32 count;
+    u16 sha1_id;
+    u8 sha1_hash[SHA1_DIGEST_SIZE];
+    u16 sha256_id;
+    u8 sha256_hash[SHA256_DIGEST_SIZE];
+} ev_log_hash_t;
+
 typedef struct __packed {
     u32 pcr;
     u32 event_type;
-    ev_log_hash_t digests;      /* defined in boot.h */
+    ev_log_hash_t digests;
     u32 event_size;
     /* u8 event[]; */
 } tpm20_event_t;
@@ -157,7 +166,7 @@ static const tpm20_spec_id_ev_t tpm20_id_struct = {
     .el.next_record_offset = sizeof(tpm20_spec_id_ev_t) + sizeof(tpm12_event_t)
 };
 
-int log_event_tpm12(u32 pcr, u8 sha1[20], char *event)
+int log_event_tpm12(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE], char *event)
 {
     tpm12_event_t ev;
     tpm12_spec_id_ev_t *base = (tpm12_spec_id_ev_t *)
@@ -178,7 +187,8 @@ int log_event_tpm12(u32 pcr, u8 sha1[20], char *event)
     return 1;
 }
 
-int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event)
+int log_event_tpm20(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE],
+                    u8 sha256[SHA256_DIGEST_SIZE], char *event)
 {
     tpm20_event_t ev;
     tpm20_spec_id_ev_t *base = (tpm20_spec_id_ev_t *)
