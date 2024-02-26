@@ -126,4 +126,6 @@
 #define VM_CR_DIS_A20M     (1 << 2)
 #define VM_CR_SVME_DISABLE (1 << 4)
 
+#define MULTIBOOT2_BOOTLOADER_MAGIC     0x36d76289
+
 #endif /* __DEFS_H__ */
