@@ -25,9 +25,7 @@
 #include "tpmlib/tpm2_constants.h"
 #include <sha1sum.h>
 #include <sha256.h>
-#include <linux-bootparams.h>
 #include <event_log.h>
-#include <multiboot2.h>
 #include <slrt.h>
 #include <string.h>
 #include <printk.h>
@@ -66,36 +64,6 @@ static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
     }
 
     print("PCR extended\n");
-}
-
-/*
- * Checks if ptr points to *uncompressed* part of the kernel
- */
-static inline void *is_in_kernel(struct boot_params *bp, void *ptr)
-{
-    if ( ptr < _p(bp->code32_start) ||
-         ptr >= _p(bp->code32_start + (bp->syssize << 4)) ||
-         (ptr >= _p(bp->code32_start + bp->payload_offset) &&
-          ptr < _p(bp->code32_start + bp->payload_offset + bp->payload_length)) )
-        return NULL;
-    return ptr;
-}
-
-static inline struct kernel_info *get_kernel_info(struct boot_params *bp)
-{
-    return is_in_kernel(bp, _p(bp->code32_start + bp->kern_info_offset));
-}
-
-static inline struct mle_header *get_mle_hdr(struct boot_params *bp,
-                                      struct kernel_info *ki)
-{
-    return is_in_kernel(bp, _p(bp->code32_start + ki->mle_header_offset));
-}
-
-static inline void *get_kernel_entry(struct boot_params *bp,
-                                     struct mle_header *mle_hdr)
-{
-    return is_in_kernel(bp, _p(bp->code32_start + mle_hdr->sl_stub_entry));
 }
 
 /*
@@ -350,19 +318,4 @@ asm_return_t skl_main(void)
     print("skl_main() is about to exit\n");
 
     return ret;
-}
-
-static void __maybe_unused build_assertions(void)
-{
-    BUILD_BUG_ON(offsetof(struct boot_params, tb_dev_map)        != 0x0d8);
-    BUILD_BUG_ON(offsetof(struct boot_params, syssize)           != 0x1f4);
-    BUILD_BUG_ON(offsetof(struct boot_params, version)           != 0x206);
-    BUILD_BUG_ON(offsetof(struct boot_params, code32_start)      != 0x214);
-    BUILD_BUG_ON(offsetof(struct boot_params, cmd_line_ptr)      != 0x228);
-    BUILD_BUG_ON(offsetof(struct boot_params, cmdline_size)      != 0x238);
-    BUILD_BUG_ON(offsetof(struct boot_params, payload_offset)    != 0x248);
-    BUILD_BUG_ON(offsetof(struct boot_params, payload_length)    != 0x24c);
-    BUILD_BUG_ON(offsetof(struct boot_params, kern_info_offset)  != 0x268);
-
-    BUILD_BUG_ON(offsetof(struct kernel_info, mle_header_offset) != 0x010);
 }
