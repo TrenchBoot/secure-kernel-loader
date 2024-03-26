@@ -17,8 +17,10 @@
  */
 
 #include <boot.h>
+#include <sha1sum.h>
+#include <sha256.h>
+#include <slrt.h>
 #include <string.h>
-#include <tags.h>
 #include "tpmlib/tpm.h"
 #include "tpmlib/tpm2_constants.h"
 
@@ -105,15 +107,24 @@ typedef struct __packed {
 typedef struct __packed {
     u32 pcr;
     u32 event_type;
-    u8  digest[20];
+    u8  digest[SHA1_DIGEST_SIZE];
     u32 event_size;
     /* u8 event[]; */
 } tpm12_event_t;
 
+/* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
+typedef struct __packed {
+    u32 count;
+    u16 sha1_id;
+    u8 sha1_hash[SHA1_DIGEST_SIZE];
+    u16 sha256_id;
+    u8 sha256_hash[SHA256_DIGEST_SIZE];
+} ev_log_hash_t;
+
 typedef struct __packed {
     u32 pcr;
     u32 event_type;
-    ev_log_hash_t digests;      /* defined in boot.h */
+    ev_log_hash_t digests;
     u32 event_size;
     /* u8 event[]; */
 } tpm20_event_t;
@@ -155,7 +166,7 @@ static const tpm20_spec_id_ev_t tpm20_id_struct = {
     .el.next_record_offset = sizeof(tpm20_spec_id_ev_t) + sizeof(tpm12_event_t)
 };
 
-int log_event_tpm12(u32 pcr, u8 sha1[20], char *event)
+int log_event_tpm12(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE], char *event)
 {
     tpm12_event_t ev;
     tpm12_spec_id_ev_t *base = (tpm12_spec_id_ev_t *)
@@ -176,7 +187,8 @@ int log_event_tpm12(u32 pcr, u8 sha1[20], char *event)
     return 1;
 }
 
-int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event)
+int log_event_tpm20(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE],
+                    u8 sha256[SHA256_DIGEST_SIZE], char *event)
 {
     tpm20_event_t ev;
     tpm20_spec_id_ev_t *base = (tpm20_spec_id_ev_t *)
@@ -204,9 +216,12 @@ int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event)
 int event_log_init(struct tpm *tpm)
 {
     unsigned int min_size;
-    struct skl_tag_evtlog *t = next_of_type(&bootloader_data, SKL_TAG_EVENT_LOG);
+    struct slr_entry_log_info *info;
+    u8 hash[SHA1_DIGEST_SIZE];
 
-    if ( t == NULL || next_of_type(t, SKL_TAG_EVENT_LOG) != NULL )
+    info = next_entry_with_tag(NULL, SLR_ENTRY_LOG_INFO);
+
+    if ( info == NULL || next_entry_with_tag(info, SLR_ENTRY_LOG_INFO) != NULL )
         goto err;
 
     min_size = sizeof (tpm12_event_t);
@@ -227,11 +242,11 @@ int event_log_init(struct tpm *tpm)
     }
 
     /* Note that min_size does not include tpmXX_event_t.event[] entries */
-    if ( t->size < min_size )
+    if ( info->size < min_size )
         goto err;
 
-    ptr_current = evtlog_base = _p(t->address);
-    limit = _p(t->address + t->size);
+    ptr_current = evtlog_base = _p(info->addr);
+    limit = _p(info->addr + info->size);
 
     /* Check for overflow */
     if ( ptr_current > limit )
@@ -245,7 +260,12 @@ int event_log_init(struct tpm *tpm)
     if ( !(_p(limit) < _p(_start) || _p(_start + SLB_SIZE) < _p(ptr_current)) )
         goto err;
 
-    memset(ptr_current, 0, t->size);
+    memset(ptr_current, 0, info->size);
+
+    /* Check if log format matches TPM family */
+    if ((tpm->family == TPM12 && info->format != SLR_LOG_FORMAT_TPM12_TXT) ||
+        (tpm->family == TPM20 && info->format != SLR_LOG_FORMAT_TPM20_TCG))
+        goto err;
 
     /* Write log header */
     {
@@ -266,52 +286,26 @@ int event_log_init(struct tpm *tpm)
     if ( tpm->family == TPM12 ) {
         tpm12_spec_id_ev_t *id = (tpm12_spec_id_ev_t *)ptr_current;
         log_write(&tpm12_id_struct, sizeof(tpm12_id_struct));
-        id->hdr.container_size = t->size;
+        id->hdr.container_size = info->size;
     } else {
         tpm20_spec_id_ev_t *id = (tpm20_spec_id_ev_t *)ptr_current;
         log_write(&tpm20_id_struct, sizeof(tpm20_id_struct));
-        id->el.allocated_event_container_size = t->size;
+        id->el.allocated_event_container_size = info->size;
         id->el.phys_addr = _u(evtlog_base);
     }
 
     /* Log what was done by SKINIT */
+    sha1sum(hash, _start, _end_of_measured - _start);
     if ( tpm->family == TPM12 )
     {
-        struct skl_tag_hash *h = next_of_type(&bootloader_data, SKL_TAG_SKL_HASH);
-
-        while ( h != NULL )
-        {
-            if ( h->algo_id == TPM_ALG_SHA1 )
-                return log_event_tpm12(17, h->digest, "SKINIT");
-
-            h = next_of_type(h, SKL_TAG_SKL_HASH);
-        }
-
-        /* No SHA1 hash was passed by a bootloader? */
-        return 1;
+        return log_event_tpm12(17, hash, "SKINIT");
     }
-     else
+    else if ( tpm->family == TPM20 )
     {
-        struct skl_tag_hash *h = next_of_type(&bootloader_data, SKL_TAG_SKL_HASH);
-        u8 *sha1 = NULL;
-        u8 *sha256 = NULL;
+        u8 sha256_hash[SHA256_DIGEST_SIZE];
 
-        while ( h != NULL )
-        {
-            if ( h->algo_id == TPM_ALG_SHA1 )
-                sha1 = h->digest;
-
-            if ( h->algo_id == TPM_ALG_SHA256 )
-                sha256 = h->digest;
-
-            if ( sha1 != NULL && sha256 != NULL )
-                return log_event_tpm20(17, sha1, sha256, "SKINIT");
-
-            h = next_of_type(h, SKL_TAG_SKL_HASH);
-        }
-
-        /* Either SHA1 or SHA256 hash wasn't passed by a bootloader? */
-        return 1;
+        sha256sum(sha256_hash, _start, _end_of_measured - _start);
+        return log_event_tpm20(17, hash, sha256_hash, "SKINIT");
     }
 
 err:

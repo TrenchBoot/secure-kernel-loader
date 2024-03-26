@@ -23,10 +23,6 @@
  */
 #pragma GCC visibility push(hidden)
 
-#define LINUX_BOOT      0
-#define SIMPLE_PAYLOAD  1
-#define MULTIBOOT2      2
-
 /* Update if code changes significantly. */
 #define MAX_STACK_SIZE  0x280
 
@@ -129,5 +125,7 @@
 #define VM_CR_R_INIT       (1 << 1)
 #define VM_CR_DIS_A20M     (1 << 2)
 #define VM_CR_SVME_DISABLE (1 << 4)
+
+#define MULTIBOOT2_BOOTLOADER_MAGIC     0x36d76289
 
 #endif /* __DEFS_H__ */
