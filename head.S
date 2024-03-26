@@ -33,18 +33,10 @@
 
 GLOBAL(sl_header)
 	.word	_entry           /* SL header SKL offset to code start */
-	.word	bootloader_data  /* SL header SKL measured length */
-	.word	skl_info
+	.word	_end_of_measured /* SL header SKL measured length */
+	.word	skl_info         /* Offset to SKL info with UUID and version */
+	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 ENDDATA(sl_header)
-
-GLOBAL(skl_stack_canary)
-	.long STACK_CANARY
-ENDDATA(skl_stack_canary)
-skl_stack:
-	.fill 0x280, 1, 0xcc   /* Enough space for now */
-	.align 0x10, 0         /* Ensure proper alignment for 64bit */
-.L_stack_base:
-ENDDATA(skl_stack)
 
 	.text
 	.code32
@@ -67,8 +59,19 @@ GLOBAL(_entry)
 	 */
 	mov	%eax, %ebp
 
-	/* Set up the Stage 1 stack. */
-	lea	.L_stack_base(%ebp), %esp
+	/* Check if we have enough space available for stack. */
+	lea	bootloader_data(%ebp), %ebx
+	/* TODO: below uses bootloader_data.size, must be changed for SLRT. */
+	movzwl	%ss:2(%ebx), %edx
+	add	%edx, %ebx
+	add	$MAX_STACK_SIZE, %ebx
+	cmp	%ebx, %esp
+	jge	.Lenough_stack
+1:
+	/* XXX: is there any way of notifying the user about this? */
+	hlt
+	jmp	1b
+.Lenough_stack:
 
 	/*
 	 * Clobber IDTR.limit to prevent stray interrupts/exceptions/INT from
@@ -77,7 +80,6 @@ GLOBAL(_entry)
 	push	$0
 	push	$0
 	lidt	(%esp)
-	add	$8, %esp
 
 	/* Clear DIS_A20M. R_INIT is cleared by the kernel. */
 	mov	$IA32_VM_CR, %ecx
@@ -85,27 +87,78 @@ GLOBAL(_entry)
 	and	$~(VM_CR_DIS_A20M), %eax
 	wrmsr
 
-	/* Relocate GDT.base, 64bit ljmp offset, and pagetables. */
-	add	%ebp, 2 + gdtr(%ebp)
-#ifdef __x86_64__
-	add	%ebp, 1 + .Ljump64(%ebp)
-	add	%ebp,        l4_identmap(%ebp) /* L4[0] => L3        */
-	add	%ebp,        l3_identmap(%ebp) /* L3[0] => First  L2 */
-	add	%ebp, 0x08 + l3_identmap(%ebp) /* L3[1] => Second L2 */
-	add	%ebp, 0x10 + l3_identmap(%ebp) /* L3[2] => Third  L2 */
-	add	%ebp, 0x18 + l3_identmap(%ebp) /* L3[3] => Fourth L2 */
-	add	%ebp,        l2_identmap(%ebp) /* L2[0] => L1        */
-#endif
-
 	/* Load GDT */
-	lgdt	gdtr(%ebp)
+	movl	$gdt, 4(%esp)			/* Base ... */
+	add	%ebp, 4(%esp)			/* ... relocated */
+	movw	$(.Lgdt_end - gdt - 1), 2(%esp)	/* Limit */
+	lgdt	2(%esp)
+	add	$8, %esp
 
 	/* Load data segment regs.  %ss is already flat and matches DS_SEL. */
 	mov	$DS_SEL, %eax
 	mov	%eax, %ds
 	mov	%eax, %es
 
+	/* Clear .bss.  Linker scripts ensures multiple of 4B size. */
+	xor	%eax, %eax
+	cld
+	lea	_bss(%ebp), %edi
+	lea	_ebss(%ebp), %ecx
+	sub	%edi, %ecx
+	shr	$2, %ecx
+	rep stosl
+
 #ifdef __x86_64__
+	/*
+	 * Pagetables are located in .bss that was just cleared, and we are
+	 * loaded to <4GB memory, so we don't have to bother with writing to
+	 * higher dword of each entry.
+	 */
+	/* 1x L1 page, 512 entries mapping total of 2M. */
+	lea	l1_identmap(%ebp), %edi
+	mov	$512, %ecx
+	mov	$(_PAGE_AD + _PAGE_RW + _PAGE_PRESENT + 512 * PAGE_SIZE), %edx
+.Lfill_l1_identmap:
+	sub	$PAGE_SIZE, %edx
+	/* Loop runs for ecx=[512..1] for entries [511..0], hence -8. */
+	mov	%edx, -8(%edi,%ecx,8)
+	loop	.Lfill_l1_identmap
+
+	/* 4x L2 pages, each page mapping 1G of RAM. */
+	lea	l2_identmap(%ebp), %edi
+	/* 1st entry points to L1. */
+	lea	(l1_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+	mov	%edx, (%edi)
+	/* Other entries are 2MB pages. */
+	mov	$(4 * 512 - 1), %ecx
+	/*
+	 * XXX: Value below should be 4GB + flags, which wouldn't fit in 32b
+	 * register. To avoid warning from the assembler, 4GB is skipped here.
+	 * Substitution in first iteration makes the value roll over and point
+	 * to 4GB - 2MB + flags.
+	 */
+	mov	$(_PAGE_PSE + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT), %edx
+.Lfill_l2_identmap:
+	sub	$(1 << L2_PT_SHIFT), %edx
+	/* Loop runs for ecx=[2047..1] for entries [2047..1]. */
+	mov	%edx, (%edi,%ecx,8)
+	loop	.Lfill_l2_identmap
+
+	/* 1x L3 page, mapping the 4x L2 pages. */
+	lea	l3_identmap(%ebp), %edi
+	mov	$4, %ecx
+	lea	(l2_identmap + 4 * PAGE_SIZE \
+	         + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+.Lfill_l3_identmap:
+	sub	$PAGE_SIZE, %edx
+	/* Loop runs for ecx=[4..1] for entries [3..0], hence -8. */
+	mov	%edx, -8(%edi,%ecx,8)
+	loop	.Lfill_l3_identmap
+
+	/* 1x L4 page, mapping the L3 page. */
+	lea	(l3_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT)(%ebp), %edx
+	mov	%edx, l4_identmap(%ebp)
+
 	/* Restore CR4, PAE must be enabled before IA-32e mode */
 	mov	%cr4, %ecx
 	or	$CR4_PAE, %ecx
@@ -125,9 +178,11 @@ GLOBAL(_entry)
 	or	$CR0_PG | CR0_NE | CR0_TS | CR0_MP, %eax
 	mov	%eax, %cr0
 
-	/* Now in IA-32e compatibility mode, ljmp to 64b mode */
-.Ljump64:
-        ljmp	$CS_SEL64, $1f /* Offset - dynamically relocated. */
+	/* Now in IA-32e compatibility mode, use lret to jump to 64b mode */
+	lea	1f(%ebp), %ecx
+	push	$CS_SEL64
+	push	%ecx
+	lret
 
 	.code64
 
@@ -204,17 +259,13 @@ simple_payload:
 	jmp	*%ebx
 ENDFUNC(_entry)
 
-	.data
-
+	.section .rodata, "a", @progbits
 .align 8
 gdt:
-	/* Null Segment. Reused for 32bit GDTR */
-	.word   0
-gdtr:
-	.word	.Lgdt_end - gdt - 1 /* Limit */
-	.long	gdt                 /* Base - dynamically relocated. */
-ENDDATA(gdtr)
-
+	/* Null Segment */
+	.word	0
+	.word	0
+	.long	0
 	/* 32b Code Segment */
 	.word	0xffff /* Limit 1 */
 	.word	0x0000 /* Base 1 */
@@ -241,43 +292,30 @@ ENDDATA(gdtr)
 .Lgdt_end:
 ENDDATA(gdt)
 
-.section .page_data, "a", @progbits
-.align PAGE_SIZE
 #ifdef __x86_64__
 	/* 64bit Pagetables, identity map of the first 4G of RAM. */
+	.section .bss.page_data, "aw", @nobits
+.align PAGE_SIZE
 
-l1_identmap: /* 1x L1 page, mapping 2M of RAM.  No relocations. */
-	idx = 0
-	.rept 512
-	.quad (idx << L1_PT_SHIFT) + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
+l1_identmap: /* 1x L1 page, mapping 2M of RAM. */
+.skip PAGE_SIZE
 ENDDATA(l1_identmap)
 
-l2_identmap: /* 4x L2 pages, each mapping 1G of RAM.  1 relocation. */
-	.quad l1_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = 1
-	.rept (512 * 4) - 1
-	.quad (idx << L2_PT_SHIFT) + _PAGE_PSE + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
+l2_identmap: /* 4x L2 pages, each mapping 1G of RAM. */
+.skip 4 * PAGE_SIZE
 ENDDATA(l2_identmap)
 
-l3_identmap: /* 1x L3 page, mapping the 4x L2 pages.  4 relocations. */
-	idx = 0
-	.rept 4
-	.quad l2_identmap + (idx * PAGE_SIZE) + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	idx = idx + 1
-	.endr
-	.align PAGE_SIZE
+l3_identmap: /* 1x L3 page, mapping the 4x L2 pages. */
+.skip PAGE_SIZE
 ENDDATA(l3_identmap)
 
-l4_identmap: /* 1x L4 page, mapping the L3 page. 1 relocation. */
-	.quad l3_identmap + _PAGE_AD + _PAGE_RW + _PAGE_PRESENT
-	.align PAGE_SIZE
+l4_identmap: /* 1x L4 page, mapping the L3 page. */
+.skip PAGE_SIZE
 ENDDATA(l4_identmap)
 #endif
 
-	.section .bootloader_data, "a", @progbits
+	.section .bootloader_data, "a", @nobits
 GLOBAL(bootloader_data)
-	.word	0			/* Dummy data to make sure that file isn't truncated */
+
+/* Avoids "missing .note.GNU-stack section implies executable stack" warning. */
+	.section .note.GNU-stack

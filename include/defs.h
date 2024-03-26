@@ -27,7 +27,8 @@
 #define SIMPLE_PAYLOAD  1
 #define MULTIBOOT2      2
 
-#define STACK_CANARY    0xDEADBEEF
+/* Update if code changes significantly. */
+#define MAX_STACK_SIZE  0x280
 
 #define PAGE_SHIFT      12
 #define PAGE_SIZE       (1 << PAGE_SHIFT)
@@ -67,7 +68,7 @@
 
 /* Due to the 64k total size limit, group all page aligned data together. */
 #define __page_data \
-    __attribute__ ((__section__(".page_data"), __aligned__(PAGE_SIZE)))
+    __attribute__ ((__section__(".bss.page_data"), __aligned__(PAGE_SIZE)))
 
 #define unreachable()   __builtin_unreachable()
 #define offsetof(a, b)  __builtin_offsetof(a, b)
