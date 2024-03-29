@@ -37,12 +37,13 @@
 #define MCH_PCI_DEVICE		0x18
 #define MCH_PCI_FUNCTION	0x0
 
+#define VIDDID			0
 #define MEMPROT_CR		0x384
 
 #define MEMPROT_EN		(1<<0)
 
-u32 dev_locate(void);
-void dev_disable_sl(u32 dev);
+u32 dev_locate(u8 cpu_node);
+void dev_disable_sl(u8 cpu_node, u32 dev);
 void disable_memory_protection(void);
 
 #endif /* __DEV_H__ */
