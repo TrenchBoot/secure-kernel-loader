@@ -117,10 +117,9 @@ static void do_dma(void)
 }
 #endif
 
-static void iommu_setup(void)
+static void dma_protection_setup(void)
 {
     u32 iommu_cap;
-    volatile u64 iommu_done __attribute__ ((aligned (8))) = 0;
 
 #ifdef TEST_DMA
     memset(_p(1), 0xcc, 0x20); //_p(0) gives a null-pointer error
@@ -150,19 +149,24 @@ static void iommu_setup(void)
      * When IOMMU is trying to read a command from buffer located in SLB it
      * receives COMMAND_HARDWARE_ERROR (master abort).
      *
-     * Luckily, after that error it enters a fail-safe state in which all
-     * operations originating from devices are blocked. The IOMMU itself can
-     * still access the memory, so after the SLB protection is lifted, it can
-     * try to read the data located inside SLB and set up a proper protection.
+     * After that error IOMMU enters a state in which protections use whatever
+     * settings are cached. In case of cold boot, all operations originating
+     * from devices are blocked. The IOMMU itself can still access the memory,
+     * so after the SLB protection is lifted, it can try to read the commands
+     * located inside SLB and set up a proper protection.
+     *
+     * The same isn't true for IOMMU that was already used earlier. It may
+     * allow devices to access the SLB memory between time when DEV is disabled
+     * and when IOMMU cache is flushed. As IOMMU command table is located in
+     * that memory, the invalidation command may never be executed...
      *
      * TODO: split iommu_load_device_table() into two parts, before and after
-     *       DEV disabling
+     *       DEV disabling, to minimize vulnerability time window
      *
-     * TODO2: check if IOMMU always blocks the devices, even when it was
-     *        configured before SKINIT
+     * TODO2: check what IOMMU_PGFSM_CONFIG does and if it exists in newer CPUs
      */
 
-    if ( iommu_cap == 0 || iommu_load_device_table(iommu_cap, &iommu_done) )
+    if ( iommu_cap == 0 || iommu_init(iommu_cap) )
     {
         if ( iommu_cap )
             print("IOMMU disabled by a firmware, please check your settings\n");
@@ -199,12 +203,7 @@ static void iommu_setup(void)
         hexdump(_p(0), 0x30);
 #endif
 
-        iommu_load_device_table(iommu_cap, &iommu_done);
-        print("Flushing IOMMU cache");
-        while ( !iommu_done )
-            print(".");
-
-        print("\nIOMMU set\n");
+        iommu_init(iommu_cap);
     }
 
 #ifdef TEST_DMA
@@ -253,15 +252,12 @@ asm_return_t skl_main(void)
 
     /*
      * Now in 64b mode, paging is setup. This is the launching point. We can
-     * now do what we want. First order of business is to setup
-     * DEV to cover memory from the start of bzImage to the end of the SKL
-     * "kernel". At the end, trampoline to the PM entry point which will
-     * include the Secure Launch stub.
+     * now do what we want. At the end, trampoline to the PM entry point which
+     * will include the Secure Launch stub.
      */
-    pci_init();
 
     /* Disable memory protection and setup IOMMU */
-    iommu_setup();
+    dma_protection_setup();
 
     /*
      * TODO Note these functions can fail but there is no clear way to

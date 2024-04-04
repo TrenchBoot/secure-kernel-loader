@@ -39,14 +39,25 @@ static void send_command(u64 *mmio_base, iommu_command_t cmd, u32 *idx)
         _u(&command_buf[*idx]) - (_u(&command_buf) & ~0xfff);
 }
 
-u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
+int iommu_init(u32 cap)
 {
     u64 *mmio_base;
+    volatile u64 completed __attribute__ ((aligned (8))) = 0;
     u32 low, hi, i, idx = 0;
     iommu_command_t cmd = {0};
 
-    for (i = 0; i < ARRAY_SIZE(device_table); i++)
+    for (i = 0; i < ARRAY_SIZE(device_table); i++) {
         device_table[i].a = IOMMU_DTE_Q0_V + IOMMU_DTE_Q0_TV;
+        /*
+         * Devices (e.g. USB with legacy keyboard emulation) on some platforms
+         * can be quite noisy, this limits number of events logged to one page
+         * fault per device.
+         *
+         * NB: there are erratas due to which all entries may still be logged
+         * despite enabled suppression.
+         */
+        device_table[i].b = IOMMU_DTE_Q1_SE;
+    }
 
     pci_read(0, IOMMU_PCI_BUS,
              PCI_DEVFN(IOMMU_PCI_DEVICE, IOMMU_PCI_FUNCTION),
@@ -70,7 +81,7 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
     print_u64(mmio_base[IOMMU_MMIO_STATUS_REGISTER]);
     print("IOMMU_MMIO_STATUS_REGISTER\n");
 
-    /* Disable IOMMU and all its features */
+    /* Disable all features, but don't touch IommuEn */
     mmio_base[IOMMU_MMIO_CONTROL_REGISTER] &= ~IOMMU_CR_ENABLE_ALL_MASK;
     smp_wmb();
 
@@ -100,7 +111,8 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
      * command_buf[] to begin with, but we do save almost 4k of space,
      * 1/16th of that available to us.
      */
-    mmio_base[IOMMU_MMIO_COMMAND_BUF_BA] = (u64)(_u(command_buf) & ~0xfff)| (0x9ULL << 56);
+    mmio_base[IOMMU_MMIO_COMMAND_BUF_BA] = (u64)(_u(command_buf) & ~0xfff) |
+                                           (0x9ULL << 56);
     mmio_base[IOMMU_MMIO_COMMAND_BUF_HEAD] =
         mmio_base[IOMMU_MMIO_COMMAND_BUF_TAIL] = _u(command_buf) & 0xff0;
 
@@ -121,8 +133,8 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
     print_u64(mmio_base[IOMMU_MMIO_EVENT_LOG_BA]);
     print("IOMMU_MMIO_EVENT_LOG_BA\n");
 
-    /* Clear EventLogInt set by IOMMU not being able to read command buffer */
-    mmio_base[IOMMU_MMIO_STATUS_REGISTER] &= ~2;
+    /* Write 1 to clear EventLogInt set by IOMMU being unable to read command */
+    mmio_base[IOMMU_MMIO_STATUS_REGISTER] &= IOMMU_SR_EventLogInt;
     smp_wmb();
     mmio_base[IOMMU_MMIO_CONTROL_REGISTER] |= IOMMU_CR_CmdBufEn | IOMMU_CR_EventLogEn;
     smp_wmb();
@@ -145,16 +157,58 @@ u32 iommu_load_device_table(u32 cap, volatile u64 *completed)
     print("IOMMU_MMIO_STATUS_REGISTER\n");
 
     /* Write to a variable inside SLB (does not work in the first call) */
-    cmd.u0 = _u(completed) | 1;
-    /* This should be '_u(completed)>>32', but SLB can't be above 4GB anyway */
+    cmd.u0 = _u(&completed) | 1;
+    /* This should be '_u(&completed)>>32', but SLB can't be above 4GB anyway */
     cmd.u1 = 0;
 
     cmd.opcode = COMPLETION_WAIT;
     cmd.u2 = 0x656e6f64;    /* "done" */
     send_command(mmio_base, cmd, &idx);
 
+    /* Make sure tail pointer is updated before checking for completion */
+    smp_wmb();
+
+    print("Flushing IOMMU cache");
+    while ( !completed ) {
+        print(".");
+
+        /*
+         * On the first run, EventLogInt will be set, but IOMMU won't be able to
+         * write to the log due to active DEV. After that IOMMU stops fetching
+         * new commands, so 'completed' won't be ever set. Check if EventCode
+         * has the initial value of 0 and return instead of waiting indefinitely
+         * for 'completed'.
+         */
+        if ( mmio_base[IOMMU_MMIO_STATUS_REGISTER] & IOMMU_SR_EventLogInt ) {
+            if ( event_log[7] == 0 )
+                return 0;
+        }
+    }
+    print("\n");
+
+    if ( mmio_base[IOMMU_MMIO_STATUS_REGISTER] & IOMMU_SR_EventLogInt ) {
+        print("IOMMU event log not empty:\n");
+        hexdump(event_log, 512);
+    }
+
+    /*
+     * If Command Buffer Head Pointer Register is written to by software while
+     * CmdBufRun = 1b, the IOMMU behavior is undefined, similarly for Event Log
+     * Tail Pointer and EventLogRun = 1b. DLME may not be so kind to check for
+     * this, so stop all parsing and logging here, but keep IOMMU enabled.
+     *
+     * NB: IOMMU specification doesn't mention undefined behavior when changing
+     * Command Buffer Base Address, although it does so for Event Log Base
+     * Address. This may be an overlook, but it doesn't change anything since
+     * all parsing and logging is disabled.
+     */
+    mmio_base[IOMMU_MMIO_CONTROL_REGISTER] &= ~IOMMU_CR_ENABLE_ALL_MASK;
+    smp_wmb();
+
     print_u64(mmio_base[IOMMU_MMIO_STATUS_REGISTER]);
     print("IOMMU_MMIO_STATUS_REGISTER\n");
+
+    print("IOMMU set\n");
 
     return 0;
 }

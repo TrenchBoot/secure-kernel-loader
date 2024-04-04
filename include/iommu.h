@@ -28,6 +28,7 @@
 #define IOMMU_DTE_Q0_IW			(1ULL << 62)
 
 #define IOMMU_DTE_Q1_I			(1ULL << (96 - 64))
+#define IOMMU_DTE_Q1_SE			(1ULL << (97 - 64))
 
 #define IOMMU_DTE_Q2_IV			(1ULL << (128 - 128))
 #define IOMMU_DTE_Q2_IG			(1ULL << (133 - 128))
@@ -78,8 +79,7 @@
 #define IOMMU_CR_BlkStopMrkEn		(1ULL << 41)
 #define IOMMU_CR_PprAutoRspAon		(1ULL << 42)
 
-#define IOMMU_CR_ENABLE_ALL_MASK	(IOMMU_CR_IommuEn | \
-					 IOMMU_CR_HtTunEn | \
+#define IOMMU_CR_ENABLE_ALL_MASK	(IOMMU_CR_HtTunEn | \
 					 IOMMU_CR_EventLogEn | \
 					 IOMMU_CR_EventIntEn | \
 					 IOMMU_CR_ComWaitIntEn | \
@@ -103,6 +103,8 @@
 					 IOMMU_CR_PprAutoRspAon)
 
 #define IOMMU_EF_IASup			(1ULL << 6)
+
+#define IOMMU_SR_EventLogInt		(1ULL << 1)
 
 #define COMPLETION_WAIT			1
 #define INVALIDATE_DEVTAB_ENTRY		2
@@ -135,6 +137,6 @@ extern iommu_command_t command_buf[2];
 void disable_memory_protection(void);
 
 u32 iommu_locate(void);
-u32 iommu_load_device_table(u32 cap, volatile u64 *completed);
+int iommu_init(u32 cap);
 
 #endif /* __IOMMU_H__ */
