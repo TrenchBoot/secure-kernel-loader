@@ -80,14 +80,27 @@ size_t tis_send(struct tpmbuff *buf)
 	u8 status, *buf_ptr;
 	u32 burstcnt = 0;
 	u32 count = 0;
+	int i;
 
 	if (locality > TPM_MAX_LOCALITY)
 		return 0;
 
-	for (status = 0; (status & STS_COMMAND_READY) == 0; ) {
-		tpm_write8(STS_COMMAND_READY, STS(locality));
+	/*
+	 * TPM may go directly to Ready if time since entering Idle < TIMEOUT_B
+	 * (2 seconds). Some TPMs (e.g. Infineon SLB 9665) don't like having
+	 * STS_COMMAND_READY set during that time and immediately checked, which
+	 * results in bit never being set. To work around this, check status once
+	 * before delaying and don't keep setting STS_COMMAND_READY in a loop.
+	 */
+	tpm_write8(STS_COMMAND_READY, STS(locality));
+	status = tpm_read8(STS(locality));
+	for (i = 0; (status & STS_COMMAND_READY) == 0 && i < 200; i++) {
+		tpm_mdelay(10);
 		status = tpm_read8(STS(locality));
 	}
+
+	if ((status & STS_COMMAND_READY) == 0)
+		return 0;
 
 	buf_ptr = buf->head;
 
