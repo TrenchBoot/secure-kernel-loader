@@ -25,3 +25,7 @@ jobs:
       run: |
         make CC=${{matrix.compiler}} BITS=${{matrix.bits}} ${{matrix.lto}}
         ./extend_skl_only.sh
+
+    - name: make tests
+      run: |
+        make CC=${{matrix.compiler}} BITS=64 ${{matrix.lto}} tests
