@@ -20,12 +20,10 @@
 #include <sha256.h>
 #include <string.h>
 
-#define SHA256_BLOCK_SIZE   64
-
 struct sha256_state {
     u32 state[SHA256_DIGEST_SIZE / 4];
     u32 count;
-    u8 buf[SHA256_BLOCK_SIZE];
+    u8 buf[64];
 };
 
 static inline u32 ror32(u32 word, unsigned int shift)
@@ -78,14 +76,18 @@ static const u32 K[] = {
 
 static void sha256_transform(u32 *state, const void *_input)
 {
-    const u32 *input = _input;
+    const u8 *input = _input;
     u32 a, b, c, d, e, f, g, h, t1, t2;
     u32 W[16];
     int i;
 
     /* load the input */
     for ( i = 0; i < 16; i++ )
-        W[i] = be32_to_cpu(input[i]);
+    {
+        u32 tmp;
+        memcpy(&tmp, &input[i*sizeof(u32)], sizeof(u32));
+        W[i] = be32_to_cpu(tmp);
+    }
 
     /* load the state into our registers */
     a = state[0];  b = state[1];  c = state[2];  d = state[3];
@@ -163,9 +165,9 @@ static void sha256_once(struct sha256_state *sctx, const void *data, u32 len)
 
 static void sha256_final(struct sha256_state *sctx, void *_dst)
 {
-    u32 *dst = _dst;
-    u64 *count;
+    u8 *dst = _dst;
     unsigned int i, partial = sctx->count & 0x3f;
+    u64 ml = cpu_to_be64((u64)sctx->count << 3);
 
     /* Start padding */
     sctx->buf[partial++] = 0x80;
@@ -173,7 +175,7 @@ static void sha256_final(struct sha256_state *sctx, void *_dst)
     if ( partial > 56 )
     {
         /* Need one extra block - pad to 64 */
-        memset(sctx->buf + partial, 0, 64 - partial);
+        memset(sctx->buf + partial, 0, sizeof(sctx->buf) - partial);
         sha256_transform(sctx->state, sctx->buf);
         partial = 0;
     }
@@ -181,13 +183,15 @@ static void sha256_final(struct sha256_state *sctx, void *_dst)
     memset(sctx->buf + partial, 0, 56 - partial);
 
     /* Append the 64 bit count */
-    count = (void *)&sctx->buf[56];
-    *count = cpu_to_be64((u64)sctx->count << 3);
+    memcpy(sctx->buf + 56, &ml, sizeof(ml));
     sha256_transform(sctx->state, sctx->buf);
 
     /* Store state in digest */
     for ( i = 0; i < 8; i++ )
-        dst[i] = cpu_to_be32(sctx->state[i]);
+    {
+        u32 be = cpu_to_be32(sctx->state[i]);
+        memcpy(&dst[i*sizeof(u32)], &be, sizeof(u32));
+    }
 }
 
 void sha256sum(u8 hash[static SHA256_DIGEST_SIZE], const void *data, u32 len)

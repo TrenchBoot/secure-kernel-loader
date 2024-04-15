@@ -36,23 +36,18 @@ static inline u32 rol( u32 x, int n)
 
 typedef struct {
     u32 count;
-    union {
-        struct {
-            u32 h0, h1, h2, h3, h4;
-        };
-        u32 h[5];
-    };
-    unsigned char buf[64];
+    u32 h[5];
+    u8 buf[64];
 } SHA1_CONTEXT;
 
 static void sha1_init( SHA1_CONTEXT *hd )
 {
     *hd = (SHA1_CONTEXT){
-        .h0 = 0x67452301,
-        .h1 = 0xefcdab89,
-        .h2 = 0x98badcfe,
-        .h3 = 0x10325476,
-        .h4 = 0xc3d2e1f0,
+        .h[0] = 0x67452301,
+        .h[1] = 0xefcdab89,
+        .h[2] = 0x98badcfe,
+        .h[3] = 0x10325476,
+        .h[4] = 0xc3d2e1f0,
     };
 }
 
@@ -70,20 +65,24 @@ static u32 sha1_blend(u32 *x, unsigned int i)
  */
 static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
 {
-    const u32 *data = _data;
+    const u8 *data = _data;
     u32 a,b,c,d,e;
     u32 x[16];
     int i;
 
     /* get values from the chaining vars */
-    a = hd->h0;
-    b = hd->h1;
-    c = hd->h2;
-    d = hd->h3;
-    e = hd->h4;
+    a = hd->h[0];
+    b = hd->h[1];
+    c = hd->h[2];
+    d = hd->h[3];
+    e = hd->h[4];
 
     for ( i = 0; i < 16; ++i )
-        x[i] = cpu_to_be32(data[i]);
+    {
+        u32 tmp;
+        memcpy(&tmp, &data[i*sizeof(u32)], sizeof(u32));
+        x[i] = be32_to_cpu(tmp);
+    }
 
 
 #define K1  0x5A827999L
@@ -147,11 +146,11 @@ static void sha1_transform(SHA1_CONTEXT *hd, const void *_data)
     }
 
     /* Update chaining vars */
-    hd->h0 += a;
-    hd->h1 += b;
-    hd->h2 += c;
-    hd->h3 += d;
-    hd->h4 += e;
+    hd->h[0] += a;
+    hd->h[1] += b;
+    hd->h[2] += c;
+    hd->h[3] += d;
+    hd->h[4] += e;
 }
 
 
@@ -176,6 +175,7 @@ static void
 sha1_final(SHA1_CONTEXT *hd, u8 hash[SHA1_DIGEST_SIZE])
 {
     unsigned int partial = hd->count & 0x3f;
+    u64 ml = cpu_to_be64((u64)hd->count << 3);
 
     /* Start padding */
     hd->buf[partial++] = 0x80;
@@ -191,13 +191,14 @@ sha1_final(SHA1_CONTEXT *hd, u8 hash[SHA1_DIGEST_SIZE])
     memset(hd->buf + partial, 0, 56 - partial);
 
     /* append the 64 bit count */
-    u64 *count = (void *)&hd->buf[56];
-    *count = cpu_to_be64((u64)hd->count << 3);
+    memcpy(hd->buf + 56, &ml, sizeof(ml));
     sha1_transform(hd, hd->buf);
 
-    u32 *p = (void *)hash;
     for ( int i = 0; i < 5; ++i )
-        p[i] = be32_to_cpu(hd->h[i]);
+    {
+        u32 be = cpu_to_be32(hd->h[i]);
+        memcpy(&hash[i*sizeof(u32)], &be, sizeof(u32));
+    }
 }
 
 void sha1sum(u8 hash[static SHA1_DIGEST_SIZE], const void *ptr, u32 len)
