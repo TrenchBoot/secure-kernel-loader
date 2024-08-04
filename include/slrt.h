@@ -5,8 +5,8 @@
 #include <types.h>
 
 struct slr_entry_hdr {
-    u16 tag;
-    u16 size;
+    u32 tag;
+    u32 size;
 } __packed;
 
 #define SLR_ENTRY_INVALID           0x0000
@@ -32,7 +32,7 @@ struct slr_table {
 
 struct slr_bl_context {
     u16 bootloader;
-    u16 reserved;
+    u16 reserved[3];
     u64 context;
 } __packed;
 
@@ -40,21 +40,21 @@ struct slr_bl_context {
 
 struct slr_entry_dl_info {
     struct slr_entry_hdr hdr;
+    u64 dce_size;
+    u64 dce_base;
+    u64 dlme_size;
+    u64 dlme_base;
+    u64 dlme_entry;     /* Offset from dlme_base */
     struct slr_bl_context bl_context;
     u64 dl_handler;
-    u64 dce_base;
-    u32 dce_size;
-    u64 dlme_base;
-    u32 dlme_size;
-    u32 dlme_entry;     /* Offset from dlme_base */
 } __packed;
 
 struct slr_entry_log_info {
     struct slr_entry_hdr hdr;
     u16 format;
     u16 reserved;
-    u64 addr;
     u32 size;
+    u64 addr;
 } __packed;
 
 #define SLR_LOG_FORMAT_TPM12_TXT     1
@@ -67,8 +67,8 @@ struct slr_policy_entry {
     u16 entity_type;
     u16 flags;
     u16 reserved;
-    u64 entity;
     u64 size;
+    u64 entity;
     char evt_info[TPM_EVENT_INFO_LENGTH];
 } __packed;
 
@@ -93,6 +93,7 @@ struct slr_policy_entry {
 
 struct slr_entry_policy {
     struct slr_entry_hdr hdr;
+    u16 reserved[2];
     u16 revision;
     u16 nr_entries;
     struct slr_policy_entry policy_entries[];
