@@ -231,27 +231,15 @@ static void dma_protection_setup(void)
 #endif
 }
 
-/*
- * Function return ABI magic:
- *
- * By returning a simple object of two pointers, the SYSV ABI splits it across
- * %rax and %rdx rather than spilling it to the stack.  This is far more
- * convenient for our asm caller to deal with.
- */
-typedef struct {
-    void *dlme_entry;   /* %eax */
-    void *dlme_arg;     /* %edx */
-} asm_return_t;
-
-asm_return_t skl_main(void)
+void *skl_main(void)
 {
     struct tpm *tpm;
     struct slr_entry_dl_info *dl_info;
-    asm_return_t ret;
+    void *dlme_entry;
     u32 entry_offset;
 
     /*
-     * Now in 64b mode, paging is setup. This is the launching point. We can
+     * Now in 64b mode, paging is set up. This is the launching point. We can
      * now do what we want. At the end, trampoline to the PM entry point which
      * will include the Secure Launch stub.
      */
@@ -298,14 +286,13 @@ asm_return_t skl_main(void)
     tpm_relinquish_locality(tpm);
     free_tpm(tpm);
 
-    ret.dlme_entry = _p(dl_info->dlme_base + dl_info->dlme_entry);
-    ret.dlme_arg = _p(dl_info->bl_context.context);
+    dlme_entry = _p(dl_info->dlme_base + dl_info->dlme_entry);
 
     /* End of the line, off to the protected mode entry into the kernel */
     print("dlme_entry:\n");
-    hexdump(ret.dlme_entry, 0x100);
-    print("dlme_arg:\n");
-    hexdump(ret.dlme_arg, 0x280);
+    hexdump(dlme_entry, 0x100);
+    print("bl_context:\n");
+    hexdump(_p(dl_info->bl_context.context), 0x280);
     print("skl_base:\n");
     hexdump(_start, 0x100);
     print("bootloader_data:\n");
@@ -313,5 +300,5 @@ asm_return_t skl_main(void)
 
     print("skl_main() is about to exit\n");
 
-    return ret;
+    return dlme_entry;
 }
