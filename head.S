@@ -190,16 +190,23 @@ GLOBAL(_entry)
 	call	skl_main
 
 	/*
-	 * skl_main() is magic.  It returns two pointers by register:
+	 * skl_main() returns a pointer to protected mode kernel entry in %eax. It
+	 * could also return the argument for the kernel (depending on kernel type,
+	 * this could be either Linux boot parameters or MBI for Multiboot2), but
+	 * for parity with what Intel TXT does, this isn't the case.
 	 *
-	 * %eax - protected mode kernel entry
-	 * %edx - argument for kernel entry point, depends on type of kernel
+	 * Intel TXT provides physical address of kernel entry point in %ebx. This
+	 * is due to the fact that %ss is undefined there, so the kernel can't use
+	 * the call/pop pair to obtain its load address. Even though it is possible
+	 * on AMD with this implementation of SKL, keep things consistent and move
+	 * the entry point address to %ebx as well.
 	 *
-	 * We stash the entry point in %edi and the argument in %esi to protect
-	 * them from clobbering during teardown.
+	 * %ebp points to base of SLB, it was set by the first instruction on SKL
+	 * entry and preserved across call to C. This is how the kernel can obtain
+	 * offset to SLRT, and through it, bootloader context and payload argument
+	 * saved within.
 	 */
-	mov	%eax, %edi
-	mov	%edx, %esi
+	mov	%eax, %ebx
 
 #ifdef __x86_64__
 
@@ -232,28 +239,8 @@ GLOBAL(_entry)
 	push	$0
 	popf
 
-	/*
-	 * Various kernels use different boot protocols, SKL supports some of
-	 * the common ones. Because of that, we are saving the same argument in
-	 * every possible place that any of the supported kernel types may look
-	 * for it. As of now, supported protocols include:
-	 *
-	 * - Linux x86 protected mode entry, not UEFI
-	 * - Multiboot2, also not UEFI
-	 * - simple payload started as 'entry(u32 arg)' function call. As we
-	 *   don't expect it to return, __cdecl, __stdcall and __pascal calling
-	 *   conventions work the same.
-	 */
-	/* Linux expects Zero Page address in %esi, it is already there */
-	/* Multiboot2 expects MBI address in %ebx and magic number in %eax */
-	mov	%esi, %ebx
-	mov	$MULTIBOOT2_BOOTLOADER_MAGIC, %eax
-	/* Simple payload expects argument on stack followed by return address */
-	push	%esi
-	push	$0
-
 	/* All set, jump to the kernel */
-	jmp	*%edi
+	jmp	*%ebx
 ENDFUNC(_entry)
 
 	.section .rodata, "a", @progbits
