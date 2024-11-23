@@ -329,6 +329,7 @@ asm_return_t skl_main(void)
 
     struct tpm *tpm;
     struct slr_entry_dl_info *dl_info;
+    struct slr_entry_amd_info *amd_info;
     asm_return_t ret;
     u32 entry_offset;
 
@@ -359,10 +360,14 @@ asm_return_t skl_main(void)
      * but we can't trust that the bootloader passed it without modification.
      */
     dl_info = next_entry_with_tag(NULL, SLR_ENTRY_DL_INFO);
+    amd_info = next_entry_with_tag(NULL, SLR_ENTRY_AMD_INFO);
 
     if ( dl_info                                     == NULL
+         || amd_info                                 == NULL
          || dl_info->hdr.size                        != sizeof(*dl_info)
          || end_of_slrt()                             < _p(&dl_info[1])
+         || amd_info->hdr.size                       != sizeof(*amd_info)
+         || end_of_slrt()                             < _p(&amd_info[1])
          || dl_info->dlme_base                       >= 0x100000000ULL
          || dl_info->dlme_base + dl_info->dlme_size  >= 0x100000000ULL
          || dl_info->dlme_entry                      >= dl_info->dlme_size
@@ -381,7 +386,7 @@ asm_return_t skl_main(void)
     free_tpm(tpm);
 
     ret.dlme_entry = _p(dl_info->dlme_base + dl_info->dlme_entry);
-    ret.dlme_arg = _p(dl_info->bl_context.context);
+    ret.dlme_arg = _p(amd_info->boot_params_base);
 
     /* End of the line, off to the protected mode entry into the kernel */
     print("dlme_entry:\n");
