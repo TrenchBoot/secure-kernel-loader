@@ -93,6 +93,8 @@ struct slr_entry_amd_info {
     u64 slrt_size;
     u64 slrt_base;
     u64 boot_params_base;
+    u16 psp_version;
+    u16 reserved[3];
 } __packed;
 
 /* Secure Kernel Loader */
