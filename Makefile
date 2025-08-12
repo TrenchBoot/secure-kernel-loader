@@ -57,18 +57,23 @@ all: skl.bin
 -include Makefile.local
 
 # Generate a flat binary
-ifeq ($(AMDSL), n)
 # As a sanity check, look for the SKL UUID at its expected offset in the binary
 # image.  One reason this might fail is if the linker decides to put an
 # unreferenced section ahead of .text, in which case link.lds needs adjusting.
 skl.bin: skl Makefile
-	objcopy -O binary -S -R '.note.*' -R '.got.plt' $< $@
+	@# first binary skips signature-related sections to ease up signing process
+	objcopy -O binary -S -R '.note.*' -R '.got.plt' -R '.skl_sig' -R '.skl_pubkey_hdr' -R '.skl_pubkey_modulus' $< $@
 	@./sanity_check.sh
-else
-skl.bin: skl Makefile
-	objcopy -O binary -S $< $@
-	python3 header_tool.py --image=skl.bin --version=0x02000200 --spl=0x00000001 --output=AmdSl_debug.BIN
-	./AmdSlSigningTool -i AmdSl_debug.BIN -o AmdSl_debug.BIN.sign
+ifeq ($(AMDSL), y)
+	# create signature
+	openssl dgst -sha384 -sign testPrivateKey.pem -out signature_rev.bin -binary -sigopt rsa_padding_mode:pss $@
+	# reverse byte order
+	xxd -c1 -p signature_rev.bin | tac | xxd -r -p > signature.bin
+	# get the modulus for pubkey header, reverse byte order
+	openssl rsa -in testPrivateKey.pem -modulus -noout | sed -e "s/Modulus=//" -e "s/../&\n/g" | tac | xxd -r -p > pubkey_mod.bin
+	# stitch binary again with all the pieces in place
+	objcopy -O binary -S -R '.note.*' -R '.got.plt' --update-section .skl_sig=signature.bin --update-section .skl_pubkey_modulus=pubkey_mod.bin $< $@
+	@./sanity_check.sh
 endif
 
 skl: link.lds $(OBJ) Makefile
@@ -109,6 +114,7 @@ cscope:
 
 .PHONY: clean
 clean:
+	# rm -f *.bin
 	rm -f skl.bin skl $(TESTS) *.d *.o *.gcov *.gcda *.gcno tpmlib/*.d tpmlib/*.o cscope.*
 
 # Compiler-generated header dependencies.  Should be last.

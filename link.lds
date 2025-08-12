@@ -36,9 +36,8 @@ SECTIONS
 		 * PCR 17 is extended with SKL padded with zeros up to a size that is
 		 * aligned up to the multiply of 4B. To keep functions in util.sh
 		 * simple, _end_of_measured is explicitly aligned. This may increase
-		 * skl.bin size by up to 3 bytes, but since next section is aligned to
-		 * 4K anyway this doesn't reduce the amount of available space, neither
-		 * does it increase the real size of data sent to TPM to be measured.
+		 * skl.bin size by up to 3 bytes, but it doesn't increase the real size
+		 * of data sent to TPM to be measured.
 		 *
 		 * Note that this padding must be part of .rodata to be included in
 		 * skl.bin, both for 'dd' used in util.sh and for checks performed by
@@ -48,8 +47,6 @@ SECTIONS
 	}
 
 	_end_of_measured = .;
-
-	. = ALIGN(16);
 
 	.skl_sig_hdr : {
 		*(.skl_sig_hdr)
@@ -61,8 +58,12 @@ SECTIONS
 		*(.skl_sig)
 	}
 
-	.skl_pubkey : {
-		*(.skl_pubkey)
+	.skl_pubkey_hdr : {
+		*(.skl_pubkey_hdr)
+	}
+
+	.skl_pubkey_modulus : {
+		*(.skl_pubkey_modulus)
 	}
 
 	.bss : {
@@ -88,8 +89,6 @@ SECTIONS
 	.bootloader_data : {
 		*(.bootloader_data)
 	}
-
-	. = 0xFFF4;
 
 	_end = .;
 
@@ -120,6 +119,11 @@ SECTIONS
 ASSERT(_end <= 0x10000, "Landing Zone exceeds 64k");
 ASSERT(SIZEOF(.got) == 0, ".got section not empty - non-hidden symbols used?");
 ASSERT(SIZEOF(.data) == 0, ".data section not empty - initialized data used?");
+
+ASSERT(!SIZEOF(.skl_sig_hdr) || SIZEOF(.skl_sig_hdr) == 0x100,
+       ".skl_sig_hdr size not 256 bytes");
+ASSERT(!SIZEOF(.skl_pubkey_hdr) || SIZEOF(.skl_pubkey_hdr) == 0x240,
+       ".skl_pubkey_hdr size not 0x240 bytes");
 
 /*
  * At least GNU ld 2.30 and earlier fail to discard the generic part of

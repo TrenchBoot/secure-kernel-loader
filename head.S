@@ -46,7 +46,7 @@ GLOBAL(sl_header)
 	.word	_end_of_measured /* SL header SKL measured length */
 	.byte	0xda, 0x75, 0xc4, 0x0e, 0xd0, 0xd3, 0x5d, 0x48, 0xb6, 0xae, 0x3c, 0xb2, 0xf, 0xb7, 0xad, 0x3a
 	.long	0xffffffff       /* Reserved */
-	.long	0xaaaa5555       /* Total Length including signature and pubkey raw data */
+	.long	_end_of_signed + 0x640 /* Total Length including signature and pubkey raw data */
 	.word	soc_flag         /* Offset to SOCFLAG Structure, see below */
 	.word	skl_info         /* Offset to SKL info with UUID and version */
 	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
@@ -320,11 +320,42 @@ gdt:
 .Lgdt_end:
 ENDDATA(gdt)
 
-/*
-	.section .skinit_reserved, "a", @progbits
-GLOBAL(skinit_reserved)
-	.fill 0x740, 1, 0x00
-*/
+#ifdef AMDSL
+	.section .skl_sig_hdr, "a", @progbits
+	.fill 16, 1, 0x00            /* Nonce */
+	.long 0x31534124             /* HeaderVersion, "$AS1" */
+	.long _end_of_signed         /* Signed Fw Size in bytes */
+	.fill 4+4+16, 1, 0x00        /* Encryption options, algorithm ID and parameters */
+	.long 1                      /* SigOption, 1 - signed */
+	.long 0                      /* SigAlgID, unknown encoding */
+	.byte KEY_ID                 /* Key ID */
+	.long 0                      /* Compression option */
+	.long 1                      /* Security patch level */
+	.fill 4+4+8, 1, 0x00         /* Uncompr. size, compr. size, compr. parameters */
+	.long 0x02000200             /* ImageVersion */
+	.fill 4+4, 1, 0x00           /* APU Family ID and Firmware Load Address */
+	.long _end_of_signed + 0x200 /* FW size with signature */
+	.fill 4+4+4+1+1+2+16+16+96   /* The rest */
+
+	/* Signature is filled during final objcopy */
+	.section .skl_sig, "a", @progbits
+	.fill 0x200, 1, 0x00
+
+	.section .skl_pubkey_hdr, "a", @progbits
+	.long 2                      /* Version ID */
+	.byte KEY_ID                 /* Key ID */
+	.byte KEY_ID                 /* Certifying key ID */
+	.fill 4+1+1+14, 1, 0x00      /* Key usage, platform vendor ID, model ID, reserved */
+	.long 4096                   /* Public exponent size in bits */
+	.long 4096                   /* Modulus size in bits */
+
+	.long 0x10001                /* Exponent */
+	.fill 508, 1, 0x00           /* XXX: does it have to be so oversized? */
+
+	/* Modulus is stored in a dedicated section, filled during final objcopy */
+	.section .skl_pubkey_modulus, "a", @progbits
+	.fill 0x200, 1, 0x00
+#endif
 
 #ifdef __x86_64__
 	/* 64bit Pagetables, identity map of the first 4G of RAM. */
