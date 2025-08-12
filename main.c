@@ -41,6 +41,51 @@ const skl_info_t __used skl_info = {
 };
 
 #if !defined(AMDSL)
+typedef struct tdFW_SIG_HEADER
+{
+    u8 Nonce[16];          /* [0x00] Unique image id */
+    u32 HeaderVersion;     /* [0x10] Version of the header */
+    u32 SizeFWSigned;      /* [0x14] Signed Fw Size in bytes */
+    u32 EncOption;         /* [0x18] 0 - Not encrypted, 1 - encrypted */
+    u32 EncAlgID;          /* [0x1C] Encryption algorithm id */
+    u8 EncParameters[16];  /* [0x20] Encryption Parameters */
+    u32 SigOption;         /* [0x30] 0 - not signed 1 - signed */
+    u32 SigAlgID;          /* [0x34] Signature algorithm ID */
+    u8 SigParameters[16];  /* [0x38] Signature parameter */
+    u32 CompOption;        /* [0x48] Compression option */
+    u32 SecPatchLevel;     /* [0x4C] Security patch level */
+    u32 UnCompImageSize;   /* [0x50] Uncompressed Image Size */
+    u32 CompImageSize;     /* [0x54] compressed Image Size */
+    u8 CompParameters[8];  /* [0x58] Compression Parameters */
+    u32 ImageVersion;      /* [0x60] Off Chip Firmware Version */
+    u32 APUFamilyID;       /* [0x64] APU Family ID or SoC ID */
+    u32 FirmwareLoadAddr;  /* [0x68] Firmware Load address (default 0) */
+    u32 SizeImage;         /* [0x6C] FW size with signature */
+    u32 SizeFWUnSigned;    /* [0x70] Size of Un-signed portion of the FW */
+    u32 FirmwareSplitAddr; /* [0x74] Offset of Nwd OS */
+    u32 SigFlags;          /* [0x78] Flags for FW signing options, perm, etc */
+    u8 FwType;             /* [0x7C] FwType */
+    u8 SubType;            /* [0x7D] SubType identifies FW */
+    u8 Reserved1[2];       /* [0x7E] *** RESERVED *** */
+    u8 EncKey[16];         /* [0x80] Encryption Key (Wrapped MEK) */
+    u8 SigningInfo[16];    /* [0x90] Signing tool specific information */
+    u8 Padd[96];           /* [0xA0] *** RESERVED *** */
+} FW_SIG_HEADER; /* Total 256 bytes */
+
+extern char _end_of_signed[];
+
+FW_SIG_HEADER __section(".skl_sig_hdr") __used hdr = {
+    .HeaderVersion = 0x31534124, /* "$AS1" */
+    .SizeFWSigned  = _u(_end_of_signed),
+    .SigOption     = 1,
+    .SigParameters = {0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77,
+                      0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}, /* TBD! */
+    .ImageVersion  = 0x02000200,
+    .SizeImage     = _u(_end_of_signed) + 0x200,
+};
+#endif
+
+#if !defined(AMDSL)
 static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
 {
     u8 hash[SHA1_DIGEST_SIZE];

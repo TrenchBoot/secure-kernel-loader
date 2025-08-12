@@ -45,9 +45,18 @@ GLOBAL(sl_header)
 	.word	_entry           /* SL header SKL offset to code start */
 	.word	_end_of_measured /* SL header SKL measured length */
 	.byte	0xda, 0x75, 0xc4, 0x0e, 0xd0, 0xd3, 0x5d, 0x48, 0xb6, 0xae, 0x3c, 0xb2, 0xf, 0xb7, 0xad, 0x3a
-	.long	0xffffffff
-	.long	0xaaaa5555
-	.word	0x1E
+	.long	0xffffffff       /* Reserved */
+	.long	0xaaaa5555       /* Total Length including signature and pubkey raw data */
+	.word	soc_flag         /* Offset to SOCFLAG Structure, see below */
+	.word	skl_info         /* Offset to SKL info with UUID and version */
+	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
+
+soc_flag:
+	/*
+	 * This structure isn't described in the spec, but it is assumed to be a
+	 * number of entries, followed by family and model of supported CPUs, in
+	 * form of EAX of CPUID leaf 1 with stepping set to 0.
+	 */
 	.long	0x00000008
 	.long	0x00860f00
 	.long	0x00a50f00
@@ -57,8 +66,6 @@ GLOBAL(sl_header)
 	.long	0x00a10f00
 	.long	0x00a80f00
 	.long	0x00aa0f00
-	.word	skl_info         /* Offset to SKL info with UUID and version */
-	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 ENDDATA(sl_header)
 
 	.text
@@ -313,9 +320,11 @@ gdt:
 .Lgdt_end:
 ENDDATA(gdt)
 
+/*
 	.section .skinit_reserved, "a", @progbits
 GLOBAL(skinit_reserved)
 	.fill 0x740, 1, 0x00
+*/
 
 #ifdef __x86_64__
 	/* 64bit Pagetables, identity map of the first 4G of RAM. */

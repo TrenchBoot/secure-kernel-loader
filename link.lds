@@ -51,8 +51,18 @@ SECTIONS
 
 	. = ALIGN(16);
 
-	.skinit_reserved : {
-		*(.skinit_reserved)
+	.skl_sig_hdr : {
+		*(.skl_sig_hdr)
+	}
+
+	_end_of_signed = .;
+
+	.skl_sig : {
+		*(.skl_sig)
+	}
+
+	.skl_pubkey : {
+		*(.skl_pubkey)
 	}
 
 	.bss : {
