@@ -58,7 +58,13 @@ typedef unsigned long       uintptr_t;
 typedef unsigned long       size_t;
 typedef long                ssize_t;
 
-typedef _Bool               bool;
+#if defined __STDC_VERSION__ && __STDC_VERSION__ >= 202311L
+/* bool, true and false are keywords.  */
+#else
+#define bool    _Bool
+#define true    1
+#define false   0
+#endif
 
 #define NULL ((void *)0)
 
