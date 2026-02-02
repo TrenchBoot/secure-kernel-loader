@@ -2,15 +2,13 @@ name: Create QubesOS RPMs
 
 on:
   push:
-    branches:
-      - '*'
     tags:
       - '*'
 
 jobs:
   qubes-dom0-package:
-    uses: TrenchBoot/.github/.github/workflows/qubes-dom0-packagev2.yml@master
-
+    uses: TrenchBoot/.github/.github/workflows/qubes-dom0-packagev2.yml@build-for-remote-signing
     with:
       qubes-component: 'secure-kernel-loader'
       qubes-pkg-src-dir: 'qubesos'
+    secrets: inherit
