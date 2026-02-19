@@ -48,8 +48,6 @@ GLOBAL(sl_header)
 	.long	0xffffffff       /* Reserved */
 	.long	_end_of_signed + 0x640 /* Total Length including signature and pubkey raw data */
 	.word	soc_flag         /* Offset to SOCFLAG Structure, see below */
-	.word	skl_info         /* Offset to SKL info with UUID and version */
-	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 
 soc_flag:
 	/*
@@ -66,6 +64,8 @@ soc_flag:
 	.long	0x00a10f00
 	.long	0x00a80f00
 	.long	0x00aa0f00
+	.word	skl_info         /* Offset to SKL info with UUID and version */
+	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 ENDDATA(sl_header)
 
 	.text
