@@ -1,0 +1,29 @@
+name: Build and package QubesOS RC RPMs
+
+on:
+  push:
+    tags:
+      - 'v*-rc*'
+
+jobs:
+  qubes-dom0-package:
+    uses: TrenchBoot/.github/.github/workflows/qubes-dom0-packagev2.yml@v1
+    with:
+      qubes-component: 'secure-kernel-loader'
+      qubes-pkg-src-dir: 'qubesos'
+  trigger-woodpecker-cicd:
+    needs: qubes-dom0-package
+    uses: TrenchBoot/.github/.github/workflows/trigger-woodpecker-pipeline.yml@v1
+    secrets:
+      woodpecker-token: ${{ secrets.WOODPECKER_TOKEN }}
+    with:
+      api-url:  'https://ci.3mdeb.com'
+      owner:    'zarhus'
+      repo:     'trenchboot-release-cicd-pipeline'
+      ref:      'master'
+      inputs: >-
+        --input GITHUB_REPO=secure-kernel-loader
+        --input GITHUB_SHA=${{ github.sha }}
+        --input GITHUB_RUN_ID=${{ github.run_id }}
+        --input QUBES_COMPONENT=secure-kernel-loader
+        --input WORKFLOW=sign-and-publish-test-rpms
