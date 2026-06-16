@@ -26,7 +26,7 @@
 #include <sha1sum.h>
 #include <sha256.h>
 #include <event_log.h>
-#include <slrt.h>
+#include <slrt/slrt.h>
 #include <string.h>
 #include <printk.h>
 #include <dev.h>
