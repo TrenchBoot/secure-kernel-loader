@@ -1,7 +1,9 @@
 #ifndef __SLRT_H__
 #define __SLRT_H__
 
+#ifndef __COREBOOT__
 #include <defs.h>
+#endif /* __COREBOOT__ */
 #include <types.h>
 
 /* SLR defined bootloaders */
@@ -97,6 +99,7 @@ struct slr_entry_amd_info {
     u16 reserved[3];
 } __packed;
 
+#ifndef __COREBOOT__
 /* Secure Kernel Loader */
 extern struct slr_table bootloader_data;
 
@@ -128,5 +131,6 @@ static inline void *next_entry_with_tag(void* _t, u16 tag)
     }
     return NULL;
 }
+#endif /* __COREBOOT__ */
 
 #endif /* __SLRT_H__ */
