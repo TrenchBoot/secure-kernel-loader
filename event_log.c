@@ -19,7 +19,7 @@
 #include <boot.h>
 #include <sha1sum.h>
 #include <sha256.h>
-#include <slrt.h>
+#include <slrt/slrt.h>
 #include <string.h>
 #include "tpmlib/tpm.h"
 #include "tpmlib/tpm2_constants.h"
