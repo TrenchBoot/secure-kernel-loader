@@ -293,11 +293,21 @@ static asm_return_t amdsl_launch()
         print("AMDSL: PSP NOT found\n");
     }
 
+    /*
+     * The DRTM service opens locality 3 to read and extend PCR 17. TIS grants
+     * a higher locality only when no lower one is active, so the host holds
+     * no locality while the command runs. Locality 2 is locked by the DRTM
+     * service until the launch succeeds, so it is requested afterwards.
+     */
+    tpm_relinquish_locality(tpm);
+
     if (!drtm_launch()) {
         print("AMDSL: skl_linux: DRTM launch failed\n");
     } else {
         print("AMDSL: skl_linux: DRTM launch successful\n");
     }
+
+    tpm_request_locality(tpm, 2);
 
     if (!drtm_extend_ossl_digest((u64)dl_info->dlme_base, dl_info->dlme_size)) {
         print("DRTM: skl_linux: failed to extend OSSL digest\n");

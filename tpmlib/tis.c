@@ -58,6 +58,8 @@ void tis_relinquish_locality(void)
 
 u8 tis_request_locality(u8 l)
 {
+	u8 access;
+
 	if (l > TPM_MAX_LOCALITY)
 		return TPM_NO_LOCALITY;
 
@@ -68,8 +70,12 @@ u8 tis_request_locality(u8 l)
 
 	tpm_write8(ACCESS_REQUEST_USE, ACCESS(l));
 
-	/* wait for locality to be granted */
-	if (tpm_read8(ACCESS(l)) & ACCESS_ACTIVE_LOCALITY)
+	/*
+	 * A locality the chipset does not decode for the host reads as all
+	 * ones, which has the reserved bit 6 set. Treat that as not granted.
+	 */
+	access = tpm_read8(ACCESS(l));
+	if (access != 0xff && (access & ACCESS_ACTIVE_LOCALITY))
 		locality = l;
 
 	return locality;
