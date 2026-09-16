@@ -54,9 +54,14 @@ soc_flag:
 	 * This structure isn't described in the spec, but it is assumed to be a
 	 * number of entries, followed by family and model of supported CPUs, in
 	 * form of EAX of CPUID leaf 1 with stepping set to 0.
+	 *
+	 * The structure has a fixed size of eight entries: GRUB and boot.h both
+	 * locate skl_info and bootloader_data at offsets 0x42 and 0x44, right
+	 * after it. Family 1Ah model 00h (EPYC 9005) takes the slot of family
+	 * 17h model 60h.
 	 */
 	.long	0x00000008
-	.long	0x00860f00
+	.long	0x00b00f00
 	.long	0x00a50f00
 	.long	0x00a40f00
 	.long	0x00a70f00
