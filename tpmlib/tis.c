@@ -212,8 +212,8 @@ size_t tis_recv(enum tpm_family f, struct tpmbuff *buf)
 	if (!tis_data_available(locality))
 		return 0;
 
-	/* read last byte */
-	if (recv_data(buf_ptr, 1) != 1)
+	/* read last byte into its own slot after the bytes already received */
+	if (recv_data(buf_ptr + expected - 1, 1) != 1)
 		return 0;
 
 	/* make sure we read everything */
