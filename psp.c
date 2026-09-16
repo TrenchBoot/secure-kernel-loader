@@ -246,9 +246,12 @@ static bool init_drtm_interface(u64 base_addr, psp_version_t psp_version)
     return true;
 }
 
-static bool drtm_wait_for_psp_ready(u32 *status)
+/* 100 ms per retry. Hashing a multi-megabyte DLME takes the PSP seconds. */
+#define DRTM_WAIT_RETRIES         50
+#define DRTM_EXTEND_WAIT_RETRIES  1200
+
+static bool drtm_wait_for_psp_ready_retries(u32 *status, int retry)
 {
-    int retry = 50;
     u32 reg_val = 0;
 
     while (--retry) {
@@ -271,6 +274,11 @@ static bool drtm_wait_for_psp_ready(u32 *status)
     }
 
     return true;
+}
+
+static bool drtm_wait_for_psp_ready(u32 *status)
+{
+    return drtm_wait_for_psp_ready_retries(status, DRTM_WAIT_RETRIES);
 }
 
 #ifndef UINT32_MAX
@@ -313,7 +321,7 @@ bool drtm_extend_ossl_digest(u64 addr, u64 size)
     *g_psp_drtm.c2pmsg_95 = (u32)(reloc_addr >> 32);
 
     *g_psp_drtm.c2pmsg_72 = (DRTM_CMD_EXTEND_OSSL_DIGEST << DRTM_MBOX_CMD_SHIFT);
-    if (!drtm_wait_for_psp_ready(&status)) {
+    if (!drtm_wait_for_psp_ready_retries(&status, DRTM_EXTEND_WAIT_RETRIES)) {
         print("DRTM: drtm_extend_ossl_digest: command failed to complete\n");
         return false;
     }
