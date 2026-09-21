@@ -259,14 +259,12 @@ static asm_return_t amdsl_launch()
     struct slr_entry_amd_info *amd_info;
     struct tpm *tpm;
     asm_return_t ret;
+    u64 log_addr, log_size;
 
     print("Enter amdsl_launch()\n");
 
     tpm = enable_tpm();
     tpm_request_locality(tpm, 2);
-    event_log_init(tpm);
-
-    print("TPM enabled and logging initialized\n");
 
     dl_info = next_entry_with_tag(NULL, SLR_ENTRY_DL_INFO);
     amd_info = next_entry_with_tag(NULL, SLR_ENTRY_AMD_INFO);
@@ -310,8 +308,32 @@ static asm_return_t amdsl_launch()
 
     tpm_request_locality(tpm, 2);
 
+    /*
+     * The log declares the TPM's banks, which the TPM tells at a locality
+     * the DRTM service unlocked with the launch, so the log starts here.
+     */
+    event_log_init(tpm);
+
     if (!drtm_extend_ossl_digest((u64)dl_info->dlme_base, dl_info->dlme_size)) {
         print("DRTM: skl_linux: failed to extend OSSL digest\n");
+    }
+
+    /*
+     * The PSP's extends of PCR 17 and 18, at the launch and just now, are
+     * in a log of its own. Append its records to ours, so the log the
+     * DLME gets replays to the PCRs. Its first record is SKINIT's
+     * measurement, which event_log_init() already logged. The banks the
+     * service did not log get the placeholder extends, at locality 2.
+     */
+    if (!drtm_get_tcg_logs(&log_addr, &log_size)) {
+        print("DRTM: skl_linux: failed to get the TCG logs\n");
+    } else if (log_addr + log_size > 0xffffffffULL) {
+        print("DRTM: skl_linux: the TCG logs are above 4 GiB, not appended\n");
+    } else if (event_log_append_tcg2(tpm, _p((u32)log_addr), (u32)log_size,
+                                     DRTM_TCG_EV_SL_IMAGE)) {
+        print("DRTM: skl_linux: failed to append the TCG logs\n");
+    } else {
+        print("DRTM: skl_linux: the TCG logs are appended to the event log\n");
     }
 
     ret.dlme_entry = _p(dl_info->dlme_base + dl_info->dlme_entry);

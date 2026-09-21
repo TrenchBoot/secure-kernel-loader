@@ -404,4 +404,73 @@ bool drtm_get_cap(void)
     return true;
 }
 
+/*
+ * One command without arguments, its status and c2pmsg_93 to _95 as the
+ * PSP left them printed, and true on DRTM_NO_ERROR.
+ */
+static bool drtm_command_no_args(const char *name, u32 cmd)
+{
+    u32 status = 0;
+
+    if (!(*g_psp_drtm.c2pmsg_72 & DRTM_MBOX_READY_MASK)) {
+        print("DRTM: ");
+        print(name);
+        print(": PSP not ready\n");
+        return false;
+    }
+
+    *g_psp_drtm.c2pmsg_93 = 0;
+    *g_psp_drtm.c2pmsg_94 = 0;
+    *g_psp_drtm.c2pmsg_95 = 0;
+    *g_psp_drtm.c2pmsg_72 = (cmd << DRTM_MBOX_CMD_SHIFT);
+    if (!drtm_wait_for_psp_ready(&status)) {
+        print("DRTM: ");
+        print(name);
+        print(": command failed to complete\n");
+        return false;
+    }
+
+    print("DRTM: ");
+    print(name);
+    print(": status ");
+    drtm_print_status(status);
+    print(", c2pmsg_93 = ");
+    print_u64(*g_psp_drtm.c2pmsg_93);
+    print(", c2pmsg_94 = ");
+    print_u64(*g_psp_drtm.c2pmsg_94);
+    print(", c2pmsg_95 = ");
+    print_u64(*g_psp_drtm.c2pmsg_95);
+    print("\n");
+
+    return status == 0;
+}
+
+/*
+ * The log of the PSP's extends, as DRTM_CMD_GET_TCG_LOGS names it: the
+ * size in c2pmsg_93, the address in _94 and _95, as
+ * DRTM_CMD_EXTEND_OSSL_DIGEST takes one. The guide places
+ * DRTM_CMD_ALLOCATE_SHARED_MEMORY before the command, so a failed first
+ * attempt is retried once after it.
+ */
+bool drtm_get_tcg_logs(u64 *addr, u64 *size)
+{
+    print("DRTM: drtm_get_tcg_logs: Entering\n");
+
+    if (!drtm_command_no_args("drtm_get_tcg_logs", DRTM_CMD_GET_TCG_LOGS)) {
+        print("DRTM: drtm_get_tcg_logs: retrying after "
+              "DRTM_CMD_ALLOCATE_SHARED_MEMORY\n");
+        drtm_command_no_args("drtm_allocate_shared_memory",
+                             DRTM_CMD_ALLOCATE_SHARED_MEMORY);
+        if (!drtm_command_no_args("drtm_get_tcg_logs",
+                                  DRTM_CMD_GET_TCG_LOGS)) {
+            return false;
+        }
+    }
+
+    *size = *g_psp_drtm.c2pmsg_93;
+    *addr = *g_psp_drtm.c2pmsg_94 | ((u64)*g_psp_drtm.c2pmsg_95 << 32);
+
+    return true;
+}
+
 #endif /* AMDSL */

@@ -261,6 +261,100 @@ void event_log_extend_placeholders(struct tpm *tpm, u32 pcr)
 }
 
 /*
+ * Appends the records of another TCG2 log to this one, bar those of
+ * skip_type, each rewritten to this log's banks: a digest the record
+ * carries for a bank is kept, a bank it lacks gets the placeholder and
+ * the PCR is extended with it at this locality, so the log replays
+ * there too. Digests of banks this log lacks are dropped. A record that
+ * does not parse or fit stops the copy with what was copied left in
+ * place. Returns non-zero when the copy stopped short.
+ */
+int event_log_append_tcg2(struct tpm *tpm, const void *log, u32 size,
+                          u32 skip_type)
+{
+    const u8 *p = log;
+    const u8 *end = p + size;
+    const tpm12_event_t *hdr = log;
+    const common_spec_id_ev_t *id;
+    const u16 *algs;
+    u32 nalgs, i;
+
+    if ( tpm->family != TPM20 || limit == ptr_current )
+        return 1;
+
+    /* The header event, EV_NO_ACTION in PCR 0 carrying Spec ID Event03 */
+    if ( size < sizeof(*hdr) + sizeof(*id) + sizeof(u32)
+         || hdr->pcr != 0
+         || hdr->event_type != EV_NO_ACTION
+         || hdr->event_size < sizeof(*id) + sizeof(u32)
+         || hdr->event_size > size - sizeof(*hdr) )
+        return 1;
+
+    id = (const common_spec_id_ev_t *)(hdr + 1);
+    for ( i = 0; i < sizeof(id->signature); i++ )
+        if ( id->signature[i] != tpm20_id_common.signature[i] )
+            return 1;
+
+    /* The algorithms of the log's records, id and size pairs, size its digests */
+    nalgs = *(const u32 *)(id + 1);
+    algs = (const u16 *)((const u32 *)(id + 1) + 1);
+    if ( nalgs == 0 || nalgs > (hdr->event_size - sizeof(*id) - 4) / 4 )
+        return 1;
+
+    p += sizeof(*hdr) + hdr->event_size;
+
+    while ( p + 3 * sizeof(u32) <= end )
+    {
+        const u8 *digests[MAX_BANKS] = { NULL };
+        u32 pcr, type, count, len, j;
+
+        pcr = *(const u32 *)p;
+        type = *(const u32 *)(p + 4);
+        count = *(const u32 *)(p + 8);
+        if ( count == 0 )
+            break;
+        p += 3 * sizeof(u32);
+
+        for ( i = 0; i < count; i++ )
+        {
+            u16 alg, dsize = 0;
+
+            if ( p + sizeof(u16) > end )
+                return 1;
+            alg = *(const u16 *)p;
+            for ( j = 0; j < nalgs; j++ )
+                if ( algs[2 * j] == alg )
+                    dsize = algs[2 * j + 1];
+            if ( dsize == 0 || dsize > end - p - sizeof(u16) )
+                return 1;
+            for ( j = 0; j < nbanks; j++ )
+                if ( banks[j].alg == alg && banks[j].size == dsize )
+                    digests[j] = p + sizeof(u16);
+            p += sizeof(u16) + dsize;
+        }
+
+        if ( p + sizeof(u32) > end )
+            return 1;
+        len = *(const u32 *)p;
+        p += sizeof(u32);
+        if ( len > end - p )
+            return 1;
+
+        if ( type != skip_type )
+        {
+            if ( write_event_tpm20(pcr, type, digests, p, len) )
+                return 1;
+            for ( j = 0; j < nbanks; j++ )
+                if ( digests[j] == NULL )
+                    tpm_extend_pcr(tpm, pcr, banks[j].alg, (u8 *)one_digest);
+        }
+        p += len;
+    }
+
+    return 0;
+}
+
+/*
  * Asks the TPM 2.0 for its allocated banks, leaving out algorithms the SKL
  * does not know. If the query fails, or finds no bank the SKL knows, the
  * log declares SHA-1 and SHA-256, the banks most discrete TPMs have

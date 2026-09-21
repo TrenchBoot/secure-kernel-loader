@@ -28,4 +28,7 @@ int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event);
  */
 void event_log_extend_placeholders(struct tpm *tpm, u32 pcr);
 
+int event_log_append_tcg2(struct tpm *tpm, const void *log, u32 size,
+                          u32 skip_type);
+
 #endif /* __EVENT_LOG_H__ */

@@ -91,6 +91,11 @@ bool drtm_launch(void);
 
 bool drtm_get_cap(void);
 
+bool drtm_get_tcg_logs(u64 *addr, u64 *size);
+
+/* The first record of the PSP's TCG log: SKINIT's measurement of the SLB */
+#define DRTM_TCG_EV_SL_IMAGE		0x8001
+
 #endif /* AMDSL */
 
 #endif /* __SKINIT_PSP_H__ */
