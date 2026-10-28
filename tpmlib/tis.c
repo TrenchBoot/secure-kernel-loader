@@ -163,25 +163,26 @@ static size_t recv_data(unsigned char *buf, size_t len)
 	return size;
 }
 
-size_t tis_recv(enum tpm_family f, struct tpmbuff *buf)
+size_t tis_recv(__attribute__((unused)) enum tpm_family f,
+		struct tpmbuff *buf)
 {
 	u32 expected;
 	u8 *buf_ptr;
 	struct tpm_header *hdr;
+	int i;
 
 	if (locality > TPM_MAX_LOCALITY)
 		return 0;
 
-	/* ensure that there is data available */
-	if (!tis_data_available(locality)) {
-		if (f == TPM12)
-			tpm1_timeout_d();
-		else
-			tpm2_timeout_d();
+	/*
+	 * Poll for the response for up to 2 s. TIMEOUT_D bounds a register
+	 * access, and a command can take much longer to complete.
+	 */
+	for (i = 0; !tis_data_available(locality) && i < 2000; i++)
+		tpm_mdelay(1);
 
-		if (!tis_data_available(locality))
-			return 0;
-	}
+	if (!tis_data_available(locality))
+		return 0;
 
 	/* read header */
 	hdr = (struct tpm_header *)buf->head;
