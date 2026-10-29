@@ -152,6 +152,17 @@ int tpm_extend_pcr(struct tpm *t, u32 pcr, u16 algo,
 	return ret;
 }
 
+int tpm_get_pcr_banks(struct tpm *t, u16 *algs, u32 *count)
+{
+	if (t->buff == NULL)
+		return -EINVAL;
+
+	if (t->family != TPM20)
+		return -EINVAL;
+
+	return tpm2_get_pcr_banks(t, algs, count);
+}
+
 void free_tpm(struct tpm *t)
 {
 	tpm_relinquish_locality(t);

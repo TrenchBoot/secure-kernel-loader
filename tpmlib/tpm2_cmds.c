@@ -158,3 +158,113 @@ free:
 out:
 	return ret;
 }
+
+int tpm2_get_pcr_banks(struct tpm *t, u16 *algs, u32 *count)
+{
+	struct tpmbuff *b = t->buff;
+	struct tpm2_cmd cmd;
+	struct tpm_header *hdr;
+	u8 *p, *end;
+	u32 nsel, i, n = 0;
+	int ret = 0;
+
+	if (b == NULL || algs == NULL || count == NULL)
+		return -EINVAL;
+
+	ret = tpm2_alloc_cmd(b, &cmd, TPM_ST_NO_SESSIONS,
+			     TPM_CC_GET_CAPABILITY);
+	if (ret < 0)
+		goto out;
+
+	/* capability, property, propertyCount */
+	cmd.params = (u8 *)tpmb_put(b, 3 * sizeof(u32));
+	if (cmd.params == NULL) {
+		ret = -ENOMEM;
+		goto free;
+	}
+
+	p = cmd.params;
+	*(u32 *)p = cpu_to_be32(TPM_CAP_PCRS);
+	p += sizeof(u32);
+	*(u32 *)p = cpu_to_be32(0);
+	p += sizeof(u32);
+	*(u32 *)p = cpu_to_be32(1);
+
+	cmd.header->size = cpu_to_be32(tpmb_size(b));
+
+	if (t->ops.send(b) != tpmb_size(b)) {
+		ret = -EAGAIN;
+		goto free;
+	}
+
+	tpmb_trim(b, tpmb_size(b));
+	hdr = (struct tpm_header *)b->head;
+	tpmb_put(b, sizeof(struct tpm_header));
+
+	if (t->ops.recv(t->family, b) != tpmb_size(b)) {
+		ret = -EAGAIN;
+		goto free;
+	}
+
+	if (hdr->code != 0) {
+		ret = (int)hdr->code;
+		goto free;
+	}
+
+	/*
+	 * Response: moreData, TPMS_CAPABILITY_DATA{capability,
+	 * TPML_PCR_SELECTION{count, TPMS_PCR_SELECTION{hash, sizeofSelect,
+	 * pcrSelect[]}[]}}. A bank with any PCR selected is allocated.
+	 */
+	p = b->head + sizeof(struct tpm_header);
+	end = b->head + hdr->size;
+
+	if (end - p < 1 + sizeof(u32) + sizeof(u32)) {
+		ret = -EIO;
+		goto free;
+	}
+	p += 1;
+	if (be32_to_cpu(*(u32 *)p) != TPM_CAP_PCRS) {
+		ret = -EIO;
+		goto free;
+	}
+	p += sizeof(u32);
+	nsel = be32_to_cpu(*(u32 *)p);
+	p += sizeof(u32);
+
+	for (i = 0; i < nsel; i++) {
+		u16 alg;
+		u8 size, j, selected = 0;
+
+		if (end - p < sizeof(u16) + 1) {
+			ret = -EIO;
+			goto free;
+		}
+		alg = be16_to_cpu(*(u16 *)p);
+		size = p[sizeof(u16)];
+		p += sizeof(u16) + 1;
+		if (end - p < size) {
+			ret = -EIO;
+			goto free;
+		}
+		for (j = 0; j < size; j++)
+			selected |= p[j];
+		p += size;
+
+		if (selected) {
+			if (n < *count)
+				algs[n] = alg;
+			n++;
+		}
+	}
+
+	if (n > *count)
+		ret = -ENOSPC;
+	else
+		*count = n;
+
+free:
+	tpmb_free(b);
+out:
+	return ret;
+}

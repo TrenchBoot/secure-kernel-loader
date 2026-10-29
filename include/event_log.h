@@ -22,4 +22,10 @@ int event_log_init(struct tpm *tpm);
 int log_event_tpm12(u32 pcr, u8 sha1[20], char *event);
 int log_event_tpm20(u32 pcr, u8 sha1[20], u8 sha256[32], char *event);
 
+/*
+ * Extends the placeholder digest into the banks of the PCR that the SKL
+ * cannot hash, so that those banks replay.
+ */
+void event_log_extend_placeholders(struct tpm *tpm, u32 pcr);
+
 #endif /* __EVENT_LOG_H__ */

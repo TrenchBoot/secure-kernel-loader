@@ -61,6 +61,7 @@ static void extend_pcr(struct tpm *tpm, void *data, u32 size, u32 pcr, char *ev)
         print("shasum calculated:\n");
         hexdump(sha256_hash, SHA256_DIGEST_SIZE);
         tpm_extend_pcr(tpm, pcr, TPM_ALG_SHA256, &sha256_hash[0]);
+        event_log_extend_placeholders(tpm, pcr);
 
         log_event_tpm20(pcr, hash, sha256_hash, ev);
     }

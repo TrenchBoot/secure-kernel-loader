@@ -85,4 +85,15 @@ struct tpm2_resp {
 int tpm2_extend_pcr(struct tpm *t, u32 pcr,
 		struct tpml_digest_values *digests);
 
+/*
+ * Reads the banks with PCRs allocated, in the TPM's order. On entry
+ * *count is the room in algs[], and on success it is the number of banks
+ * found. Returns 0 on success, or:
+ * - -ENOSPC when the TPM has more banks than that
+ * - the TPM response code when the TPM fails the command
+ * - -EIO when the reply is malformed
+ * - another negative errno when the command cannot be sent or received
+ */
+int tpm2_get_pcr_banks(struct tpm *t, u16 *algs, u32 *count);
+
 #endif

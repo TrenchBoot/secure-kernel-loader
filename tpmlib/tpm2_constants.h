@@ -58,7 +58,11 @@
 #define TPM_ALG_LAST                 _AT(u16, 0x0044)
 
 /* Table 12  Definition of (UINT32) TPM_CC Constants (Numeric Order) <IN/OUT, S> */
+#define TPM_CC_GET_CAPABILITY        _AT(u32, 0x0000017A)
 #define TPM_CC_PCR_EXTEND            _AT(u32, 0x00000182)
+
+/* Table 22  Definition of (UINT32) TPM_CAP Constants <IN/OUT, S> */
+#define TPM_CAP_PCRS                 _AT(u32, 0x00000005)
 
 /* Table 19  Definition of (UINT16) TPM_ST Constants <IN/OUT, S> */
 #define TPM_ST_NO_SESSIONS           _AT(u16, 0x8001)
