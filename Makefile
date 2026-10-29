@@ -37,6 +37,9 @@ endif
 CFLAGS  += -Os -g -MMD -MP -mno-sse -mno-mmx -fpie -fomit-frame-pointer
 CFLAGS  += -Iinclude -ffreestanding -fno-common -Wall -Werror
 LDFLAGS += -nostdlib -no-pie -Wl,--build-id=none,--fatal-warnings,--defsym=BITS=$(BITS)
+# Keep the code and the small .bss of link.lds in separate LOAD segments, so
+# ld 2.39 and later do not warn about an RWX segment.
+LDFLAGS += -Wl,-z,max-page-size=0x10
 
 CFLAGS_TPMLIB := -include boot.h -include errno-base.h -include byteswap.h -DEBADRQC=EINVAL
 

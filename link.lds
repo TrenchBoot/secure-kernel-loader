@@ -68,9 +68,18 @@ SECTIONS
 		*(.skl_pubkey_modulus)
 	}
 
-	.bss : {
-		. = ALIGN(4096);
+	/*
+	 * The small variables come first, in a section of their own, so they
+	 * fill the space that the page alignment of .bss would otherwise waste.
+	 * Page aligned data is in .bss..page_data, which the second pattern
+	 * leaves out.
+	 */
+	.bss_small : {
 		_bss = .;
+		*(SORT_BY_ALIGNMENT(.bss) SORT_BY_ALIGNMENT(.bss.[!.]*))
+	}
+
+	.bss : {
 		/*
 		 * Due to the 64k total size constraint, we link all page size/aligned
 		 * data together in a single section, to avoid wasting space in the
@@ -125,6 +134,8 @@ SECTIONS
 }
 
 ASSERT(_end <= 0x10000, "Landing Zone exceeds 64k");
+/* GRUB puts a 4 KiB SLRT at bootloader_data and refuses an SKL without room. */
+ASSERT(bootloader_data <= 0x10000 - 0x1000, "no room for a 4 KiB SLRT");
 ASSERT(SIZEOF(.got) == 0, ".got section not empty - non-hidden symbols used?");
 ASSERT(SIZEOF(.data) == 0, ".data section not empty - initialized data used?");
 
