@@ -82,7 +82,7 @@ static u16 convert_digest_list(struct tpml_digest_values *digests)
 		case TPM_ALG_SM3_256:
 			h->alg = cpu_to_be16(h->alg);
 			h = (struct tpmt_ha *)((u8 *)h + SM3256_SIZE);
-			size += sizeof(u16) + SHA1_SIZE;
+			size += sizeof(u16) + SM3256_SIZE;
 			break;
 		default:
 			return 0;
