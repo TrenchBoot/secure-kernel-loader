@@ -37,6 +37,9 @@ endif
 CFLAGS  += -Os -g -MMD -MP -mno-sse -mno-mmx -fpie -fomit-frame-pointer
 CFLAGS  += -Iinclude -ffreestanding -fno-common -Wall -Werror
 LDFLAGS += -nostdlib -no-pie -Wl,--build-id=none,--fatal-warnings,--defsym=BITS=$(BITS)
+# Keep the code and the small .bss of link.lds in separate LOAD segments, so
+# ld 2.39 and later do not warn about an RWX segment.
+LDFLAGS += -Wl,-z,max-page-size=0x10
 
 CFLAGS_TPMLIB := -include boot.h -include errno-base.h -include byteswap.h -DEBADRQC=EINVAL
 
@@ -65,8 +68,8 @@ skl.bin: skl Makefile
 	objcopy -O binary -S -R '.note.*' -R '.got.plt' -R '.skl_sig' -R '.skl_pubkey_hdr' -R '.skl_pubkey_modulus' $< $@
 	@./sanity_check.sh
 ifeq ($(AMDSL), y)
-	# create signature
-	openssl dgst -sha384 -sign testPrivateKey.pem -out signature_rev.bin -binary -sigopt rsa_padding_mode:pss $@
+	# create signature, RSA-PSS with a salt of the digest length as the PSP expects
+	openssl dgst -sha384 -sign testPrivateKey.pem -out signature_rev.bin -binary -sigopt rsa_padding_mode:pss -sigopt rsa_pss_saltlen:digest $@
 	# reverse byte order
 	xxd -c1 -p signature_rev.bin | tac | xxd -r -p > signature.bin
 	# get the modulus for pubkey header, reverse byte order

@@ -17,11 +17,13 @@
  */
 
 #include <boot.h>
+#include <printk.h>
 #include <sha1sum.h>
 #include <sha256.h>
 #include <slrt.h>
 #include <string.h>
 #include "tpmlib/tpm.h"
+#include "tpmlib/tpm_common.h"
 #include "tpmlib/tpm2_constants.h"
 
 static u8 *evtlog_base;
@@ -43,7 +45,38 @@ static int log_write(const void *data, unsigned size)
 #define EV_NO_ACTION    0x3
 #define EV_TYPE_SLAUNCH 0x502
 
-#define HASH_COUNT 2
+/*
+ * One bank per algorithm the SKL knows the digest size of: SHA-1, SHA-256,
+ * SHA-384, SHA-512 and SM3-256.
+ */
+#define MAX_BANKS 5
+
+/*
+ * The TPM's allocated banks in its order, which the TPM 2.0 log declares
+ * and every record of it carries. Where the SKL cannot compute a digest,
+ * the record carries 01 followed by zeros, as Linux and Xen log for such
+ * a bank. The Intel TXT Software Development Guide calls it OneDigest.
+ */
+static struct __packed {
+    u16 alg;
+    u16 size;
+} banks[MAX_BANKS];
+static u32 nbanks;
+
+static const u8 one_digest[SHA512_SIZE] = { 1 };
+
+static u16 digest_size(u16 alg)
+{
+    switch ( alg )
+    {
+    case TPM_ALG_SHA1:    return SHA1_SIZE;
+    case TPM_ALG_SHA256:  return SHA256_SIZE;
+    case TPM_ALG_SHA384:  return SHA384_SIZE;
+    case TPM_ALG_SHA512:  return SHA512_SIZE;
+    case TPM_ALG_SM3_256: return SM3256_SIZE;
+    default:              return 0;
+    }
+}
 
 /* For compatibility with TXT and easier operations */
 
@@ -69,6 +102,16 @@ typedef struct __packed {
     u32 next_record_offset;
 } txt_event_log_pointer2_1_element;
 
+/* Event log entries */
+
+typedef struct __packed {
+    u32 pcr;
+    u32 event_type;
+    u8  digest[SHA1_DIGEST_SIZE];
+    u32 event_size;
+    /* u8 event[]; */
+} tpm12_event_t;
+
 /* Event log headers */
 
 typedef struct __packed {
@@ -86,48 +129,38 @@ typedef struct __packed {
     tpm12_event_log_header hdr;             /* AKA u8 vendor_info[]; */
 } tpm12_spec_id_ev_t;
 
-typedef struct __packed {
-    u32  number_of_algorithms;
-    /* Hardcode table size so we can use sizeof */
-    struct {
-        u16  id;
-        u16  size;
-    } digest_sizes[HASH_COUNT];
-} tpm20_digest_sizes_t;
+/*
+ * The TPM 2.0 header is common_spec_id_ev_t, the number of algorithms,
+ * an id and size pair per bank, and the vendor info with its size. Its
+ * size depends on the number of banks.
+ */
+static u32 tpm20_header_size(void)
+{
+    return sizeof(common_spec_id_ev_t) + sizeof(u32) + nbanks * sizeof(banks[0])
+           + 1 + sizeof(txt_event_log_pointer2_1_element);
+}
 
-typedef struct __packed {
-    common_spec_id_ev_t c;
-    tpm20_digest_sizes_t sizes;
-    u8   vendor_info_size;
-    txt_event_log_pointer2_1_element el;    /* AKA u8 vendor_info[]; */
-} tpm20_spec_id_ev_t;
+/* The vendor info of the TPM 2.0 header in the log */
+static txt_event_log_pointer2_1_element *tpm20_el(void)
+{
+    return (txt_event_log_pointer2_1_element *)
+           (evtlog_base + sizeof(tpm12_event_t) + tpm20_header_size()
+            - sizeof(txt_event_log_pointer2_1_element));
+}
 
-/* Event log entries */
+/*
+ * A TPM 2.0 record is the PCR, the type, the digest count, an id and
+ * digest per bank, the event size and the event: TCG_PCR_EVENT2.
+ */
+static u32 tpm20_record_size(u32 event_size)
+{
+    u32 i, size = 3 * sizeof(u32) + sizeof(u32) + event_size;
 
-typedef struct __packed {
-    u32 pcr;
-    u32 event_type;
-    u8  digest[SHA1_DIGEST_SIZE];
-    u32 event_size;
-    /* u8 event[]; */
-} tpm12_event_t;
+    for ( i = 0; i < nbanks; i++ )
+        size += sizeof(u16) + banks[i].size;
 
-/* The same as TPML_DIGEST_VALUES but little endian, as event log expects it */
-typedef struct __packed {
-    u32 count;
-    u16 sha1_id;
-    u8 sha1_hash[SHA1_DIGEST_SIZE];
-    u16 sha256_id;
-    u8 sha256_hash[SHA256_DIGEST_SIZE];
-} ev_log_hash_t;
-
-typedef struct __packed {
-    u32 pcr;
-    u32 event_type;
-    ev_log_hash_t digests;
-    u32 event_size;
-    /* u8 event[]; */
-} tpm20_event_t;
+    return size;
+}
 
 static const tpm12_spec_id_ev_t tpm12_id_struct = {
     .c.signature = "Spec ID Event00",
@@ -150,20 +183,12 @@ static const tpm12_spec_id_ev_t tpm12_id_struct = {
     .hdr.next_event_offset = sizeof(tpm12_event_log_header)
 };
 
-static const tpm20_spec_id_ev_t tpm20_id_struct = {
-    .c.signature = "Spec ID Event03",
-    .c.spec_ver_minor = 0,
-    .c.spec_ver_major = 2,
-    .c.errata = 0,
-    .c.uintn_size = 2,
-    .sizes.number_of_algorithms = HASH_COUNT,
-    .sizes.digest_sizes[0].id = TPM_ALG_SHA1,
-    .sizes.digest_sizes[0].size = 20,
-    .sizes.digest_sizes[1].id = TPM_ALG_SHA256,
-    .sizes.digest_sizes[1].size = 32,
-    .vendor_info_size = sizeof(txt_event_log_pointer2_1_element),
-    .el.first_record_offset = 0,
-    .el.next_record_offset = sizeof(tpm20_spec_id_ev_t) + sizeof(tpm12_event_t)
+static const common_spec_id_ev_t tpm20_id_common = {
+    .signature = "Spec ID Event03",
+    .spec_ver_minor = 0,
+    .spec_ver_major = 2,
+    .errata = 0,
+    .uintn_size = 2,
 };
 
 int log_event_tpm12(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE], char *event)
@@ -187,30 +212,198 @@ int log_event_tpm12(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE], char *event)
     return 1;
 }
 
+/*
+ * Writes a TPM 2.0 record with digests[i] in bank i, or the placeholder
+ * where that is NULL. Returns non-zero when it does not fit.
+ */
+static int write_event_tpm20(u32 pcr, u32 type, const u8 *const digests[],
+                             const void *event, u32 event_size)
+{
+    u32 i, head[3] = { pcr, type, nbanks };
+
+    if ( !HAS_ENOUGH_SPACE(tpm20_record_size(event_size)) )
+        return 1;
+
+    log_write(head, sizeof(head));
+    for ( i = 0; i < nbanks; i++ )
+    {
+        log_write(&banks[i].alg, sizeof(banks[i].alg));
+        log_write(digests[i] ? digests[i] : one_digest, banks[i].size);
+    }
+    log_write(&event_size, sizeof(event_size));
+    log_write(event, event_size);
+    tpm20_el()->next_record_offset += tpm20_record_size(event_size);
+
+    return 0;
+}
+
 int log_event_tpm20(u32 pcr, u8 sha1[SHA1_DIGEST_SIZE],
                     u8 sha256[SHA256_DIGEST_SIZE], char *event)
 {
-    tpm20_event_t ev;
-    tpm20_spec_id_ev_t *base = (tpm20_spec_id_ev_t *)
-                                (evtlog_base + sizeof(tpm12_event_t));
+    const u8 *digests[MAX_BANKS] = { NULL };
+    u32 i;
 
-    ev.event_size = strlen(event);
+    for ( i = 0; i < nbanks; i++ )
+        digests[i] = banks[i].alg == TPM_ALG_SHA1 ? sha1
+                     : banks[i].alg == TPM_ALG_SHA256 ? sha256 : NULL;
 
-    if ( HAS_ENOUGH_SPACE(sizeof(ev) + ev.event_size) )
+    return write_event_tpm20(pcr, EV_TYPE_SLAUNCH, digests, event,
+                             strlen(event));
+}
+
+void event_log_extend_placeholders(struct tpm *tpm, u32 pcr)
+{
+    u32 i;
+
+    for ( i = 0; i < nbanks; i++ )
+        if ( banks[i].alg != TPM_ALG_SHA1 && banks[i].alg != TPM_ALG_SHA256 )
+            tpm_extend_pcr(tpm, pcr, banks[i].alg, (u8 *)one_digest);
+}
+
+/*
+ * Appends the records of another TCG2 log to this one, bar those of
+ * skip_type, each rewritten to this log's banks: a digest the record
+ * carries for a bank is kept, a bank it lacks gets the placeholder and
+ * the PCR is extended with it at this locality, so the log replays
+ * there too. Digests of banks this log lacks are dropped. A record that
+ * does not parse or fit stops the copy with what was copied left in
+ * place. Returns non-zero when the copy stopped short.
+ */
+int event_log_append_tcg2(struct tpm *tpm, const void *log, u32 size,
+                          u32 skip_type)
+{
+    const u8 *p = log;
+    const u8 *end = p + size;
+    const tpm12_event_t *hdr = log;
+    const common_spec_id_ev_t *id;
+    const u16 *algs;
+    u32 nalgs, i;
+
+    if ( tpm->family != TPM20 || limit == ptr_current )
+        return 1;
+
+    /* The header event, EV_NO_ACTION in PCR 0 carrying Spec ID Event03 */
+    if ( size < sizeof(*hdr) + sizeof(*id) + sizeof(u32)
+         || hdr->pcr != 0
+         || hdr->event_type != EV_NO_ACTION
+         || hdr->event_size < sizeof(*id) + sizeof(u32)
+         || hdr->event_size > size - sizeof(*hdr) )
+        return 1;
+
+    id = (const common_spec_id_ev_t *)(hdr + 1);
+    for ( i = 0; i < sizeof(id->signature); i++ )
+        if ( id->signature[i] != tpm20_id_common.signature[i] )
+            return 1;
+
+    /* The algorithms of the log's records, id and size pairs, size its digests */
+    nalgs = *(const u32 *)(id + 1);
+    algs = (const u16 *)((const u32 *)(id + 1) + 1);
+    if ( nalgs == 0 || nalgs > (hdr->event_size - sizeof(*id) - 4) / 4 )
+        return 1;
+
+    p += sizeof(*hdr) + hdr->event_size;
+
+    while ( p + 3 * sizeof(u32) <= end )
     {
-        ev.pcr = pcr;
-        ev.event_type = EV_TYPE_SLAUNCH;
-        ev.digests.count = 2;
-        ev.digests.sha1_id = TPM_ALG_SHA1;
-        memcpy(ev.digests.sha1_hash, sha1, 20);
-        ev.digests.sha256_id = TPM_ALG_SHA256;
-        memcpy(ev.digests.sha256_hash, sha256, 32);
-        base->el.next_record_offset += sizeof(ev) + ev.event_size;
-        log_write(&ev, sizeof(ev));
-        return log_write(event, ev.event_size);
+        const u8 *digests[MAX_BANKS] = { NULL };
+        u32 pcr, type, count, len, j;
+
+        pcr = *(const u32 *)p;
+        type = *(const u32 *)(p + 4);
+        count = *(const u32 *)(p + 8);
+        if ( count == 0 )
+            break;
+        p += 3 * sizeof(u32);
+
+        for ( i = 0; i < count; i++ )
+        {
+            u16 alg, dsize = 0;
+
+            if ( p + sizeof(u16) > end )
+                return 1;
+            alg = *(const u16 *)p;
+            for ( j = 0; j < nalgs; j++ )
+                if ( algs[2 * j] == alg )
+                    dsize = algs[2 * j + 1];
+            if ( dsize == 0 || dsize > end - p - sizeof(u16) )
+                return 1;
+            for ( j = 0; j < nbanks; j++ )
+                if ( banks[j].alg == alg && banks[j].size == dsize )
+                    digests[j] = p + sizeof(u16);
+            p += sizeof(u16) + dsize;
+        }
+
+        if ( p + sizeof(u32) > end )
+            return 1;
+        len = *(const u32 *)p;
+        p += sizeof(u32);
+        if ( len > end - p )
+            return 1;
+
+        if ( type != skip_type )
+        {
+            if ( write_event_tpm20(pcr, type, digests, p, len) )
+                return 1;
+            for ( j = 0; j < nbanks; j++ )
+                if ( digests[j] == NULL )
+                    tpm_extend_pcr(tpm, pcr, banks[j].alg, (u8 *)one_digest);
+        }
+        p += len;
     }
 
-    return 1;
+    return 0;
+}
+
+/*
+ * Asks the TPM 2.0 for its allocated banks, leaving out algorithms the SKL
+ * does not know. If the query fails, or finds no bank the SKL knows, the
+ * log declares SHA-1 and SHA-256, the banks most discrete TPMs have
+ * allocated by default. The query fails behind a locality the SKL does
+ * not hold, and on every CRB TPM, because crb_recv() does not read the
+ * reply.
+ */
+static void find_banks(struct tpm *tpm)
+{
+    u16 algs[MAX_BANKS];
+    u32 n = MAX_BANKS, i;
+    int rc;
+
+    nbanks = 0;
+    rc = tpm_get_pcr_banks(tpm, algs, &n);
+    if ( rc == 0 )
+    {
+        for ( i = 0; i < n; i++ )
+        {
+            if ( digest_size(algs[i]) == 0 )
+                continue;
+            banks[nbanks].alg = algs[i];
+            banks[nbanks].size = digest_size(algs[i]);
+            nbanks++;
+        }
+    }
+    else
+    {
+        print("Bank query failed: ");
+        print_u64((u32)rc);
+        print("\n");
+    }
+
+    if ( nbanks == 0 )
+    {
+        banks[0].alg = TPM_ALG_SHA1;
+        banks[0].size = SHA1_SIZE;
+        banks[1].alg = TPM_ALG_SHA256;
+        banks[1].size = SHA256_SIZE;
+        nbanks = 2;
+    }
+
+    print("Event log banks:");
+    for ( i = 0; i < nbanks; i++ )
+    {
+        print(" ");
+        print_u64(banks[i].alg);
+    }
+    print("\n");
 }
 
 int event_log_init(struct tpm *tpm)
@@ -233,8 +426,9 @@ int event_log_init(struct tpm *tpm)
     }
     else if ( tpm->family == TPM20 )
     {
-        min_size += sizeof(tpm20_id_struct);
-        min_size += 2 * sizeof(tpm20_event_t); /* SKL and kernel hashes */
+        find_banks(tpm);
+        min_size += tpm20_header_size();
+        min_size += 2 * tpm20_record_size(0); /* SKL and kernel hashes */
     }
     else
     {
@@ -277,7 +471,7 @@ int event_log_init(struct tpm *tpm)
         if ( tpm->family == TPM12 )
             ev.event_size = sizeof(tpm12_id_struct);
         else
-            ev.event_size = sizeof(tpm20_id_struct);
+            ev.event_size = tpm20_header_size();
 
         log_write(&ev, sizeof(ev));
     }
@@ -288,10 +482,19 @@ int event_log_init(struct tpm *tpm)
         log_write(&tpm12_id_struct, sizeof(tpm12_id_struct));
         id->hdr.container_size = info->size;
     } else {
-        tpm20_spec_id_ev_t *id = (tpm20_spec_id_ev_t *)ptr_current;
-        log_write(&tpm20_id_struct, sizeof(tpm20_id_struct));
-        id->el.allocated_event_container_size = info->size;
-        id->el.phys_addr = _u(evtlog_base);
+        u8 vendor_info_size = sizeof(txt_event_log_pointer2_1_element);
+        txt_event_log_pointer2_1_element el = {
+            .phys_addr = _u(evtlog_base),
+            .allocated_event_container_size = info->size,
+            .first_record_offset = 0,
+            .next_record_offset = sizeof(tpm12_event_t) + tpm20_header_size(),
+        };
+
+        log_write(&tpm20_id_common, sizeof(tpm20_id_common));
+        log_write(&nbanks, sizeof(nbanks));
+        log_write(banks, nbanks * sizeof(banks[0]));
+        log_write(&vendor_info_size, sizeof(vendor_info_size));
+        log_write(&el, sizeof(el));
     }
 
     /* Log what was done by SKINIT */
@@ -305,6 +508,10 @@ int event_log_init(struct tpm *tpm)
         u8 sha256_hash[SHA256_DIGEST_SIZE];
 
         sha256sum(sha256_hash, _start, _end_of_measured - _start);
+        /*
+         * SKINIT extended PCR 17 with the real digest in every bank, so
+         * this record does not replay in a bank that gets the placeholder.
+         */
         return log_event_tpm20(17, hash, sha256_hash, "SKINIT");
     }
 

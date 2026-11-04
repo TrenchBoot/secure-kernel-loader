@@ -29,21 +29,23 @@ SECTIONS
 		*(.headers)
 		*(.text*)
 	}
-	.rodata : {
+	.rodata : ALIGN(16) {
 		*(SORT_BY_ALIGNMENT(.rodata*))
 		/*
 		 * This is unwritten (as of AMD APM revision 3.42) behavior of SKINIT.
 		 * PCR 17 is extended with SKL padded with zeros up to a size that is
-		 * aligned up to the multiply of 4B. To keep functions in util.sh
-		 * simple, _end_of_measured is explicitly aligned. This may increase
-		 * skl.bin size by up to 3 bytes, but it doesn't increase the real size
-		 * of data sent to TPM to be measured.
+		 * aligned up to the multiply of 4B. AMD's SKL signing tools round the
+		 * measured length up to a multiple of 16B and place the signature
+		 * header at that offset, so _end_of_measured is explicitly aligned to
+		 * 16B. This keeps functions in util.sh simple and gives the PSP the
+		 * layout it expects, at the cost of up to 15 bytes of zero padding
+		 * that SKINIT measures along with the code.
 		 *
 		 * Note that this padding must be part of .rodata to be included in
 		 * skl.bin, both for 'dd' used in util.sh and for checks performed by
 		 * GRUB.
 		 */
-		. = ALIGN(4);
+		. = ALIGN(16);
 	}
 
 	_end_of_measured = .;
@@ -66,9 +68,18 @@ SECTIONS
 		*(.skl_pubkey_modulus)
 	}
 
-	.bss : {
-		. = ALIGN(4096);
+	/*
+	 * The small variables come first, in a section of their own, so they
+	 * fill the space that the page alignment of .bss would otherwise waste.
+	 * Page aligned data is in .bss..page_data, which the second pattern
+	 * leaves out.
+	 */
+	.bss_small : {
 		_bss = .;
+		*(SORT_BY_ALIGNMENT(.bss) SORT_BY_ALIGNMENT(.bss.[!.]*))
+	}
+
+	.bss : {
 		/*
 		 * Due to the 64k total size constraint, we link all page size/aligned
 		 * data together in a single section, to avoid wasting space in the
@@ -111,17 +122,28 @@ SECTIONS
 		*(.data*)
 	}
 
+	/*
+	 * Toolchain notes (e.g. .note.gnu.property) are orphan sections that ld
+	 * would otherwise place right after .rodata, between the measured region
+	 * and the signature header.
+	 */
 	/DISCARD/ : {
 		*(.eh_frame*)
+		*(.note.*)
 	}
 }
 
 ASSERT(_end <= 0x10000, "Landing Zone exceeds 64k");
+/* GRUB puts a 4 KiB SLRT at bootloader_data and refuses an SKL without room. */
+ASSERT(bootloader_data <= 0x10000 - 0x1000, "no room for a 4 KiB SLRT");
 ASSERT(SIZEOF(.got) == 0, ".got section not empty - non-hidden symbols used?");
 ASSERT(SIZEOF(.data) == 0, ".data section not empty - initialized data used?");
 
+ASSERT((_end_of_measured & 0xf) == 0, "_end_of_measured not aligned to 16 bytes");
 ASSERT(!SIZEOF(.skl_sig_hdr) || SIZEOF(.skl_sig_hdr) == 0x100,
        ".skl_sig_hdr size not 256 bytes");
+ASSERT(!SIZEOF(.skl_sig_hdr) || ADDR(.skl_sig_hdr) == _end_of_measured,
+       ".skl_sig_hdr does not directly follow the measured region");
 ASSERT(!SIZEOF(.skl_pubkey_hdr) || SIZEOF(.skl_pubkey_hdr) == 0x240,
        ".skl_pubkey_hdr size not 0x240 bytes");
 

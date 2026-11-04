@@ -58,6 +58,8 @@ void tis_relinquish_locality(void)
 
 u8 tis_request_locality(u8 l)
 {
+	u8 access;
+
 	if (l > TPM_MAX_LOCALITY)
 		return TPM_NO_LOCALITY;
 
@@ -68,8 +70,12 @@ u8 tis_request_locality(u8 l)
 
 	tpm_write8(ACCESS_REQUEST_USE, ACCESS(l));
 
-	/* wait for locality to be granted */
-	if (tpm_read8(ACCESS(l)) & ACCESS_ACTIVE_LOCALITY)
+	/*
+	 * A locality the chipset does not decode for the host reads as all
+	 * ones, which has the reserved bit 6 set. Treat that as not granted.
+	 */
+	access = tpm_read8(ACCESS(l));
+	if (access != 0xff && (access & ACCESS_ACTIVE_LOCALITY))
 		locality = l;
 
 	return locality;
@@ -157,25 +163,26 @@ static size_t recv_data(unsigned char *buf, size_t len)
 	return size;
 }
 
-size_t tis_recv(enum tpm_family f, struct tpmbuff *buf)
+size_t tis_recv(__attribute__((unused)) enum tpm_family f,
+		struct tpmbuff *buf)
 {
 	u32 expected;
 	u8 *buf_ptr;
 	struct tpm_header *hdr;
+	int i;
 
 	if (locality > TPM_MAX_LOCALITY)
 		return 0;
 
-	/* ensure that there is data available */
-	if (!tis_data_available(locality)) {
-		if (f == TPM12)
-			tpm1_timeout_d();
-		else
-			tpm2_timeout_d();
+	/*
+	 * Poll for the response for up to 2 s. TIMEOUT_D bounds a register
+	 * access, and a command can take much longer to complete.
+	 */
+	for (i = 0; !tis_data_available(locality) && i < 2000; i++)
+		tpm_mdelay(1);
 
-		if (!tis_data_available(locality))
-			return 0;
-	}
+	if (!tis_data_available(locality))
+		return 0;
 
 	/* read header */
 	hdr = (struct tpm_header *)buf->head;
@@ -206,8 +213,8 @@ size_t tis_recv(enum tpm_family f, struct tpmbuff *buf)
 	if (!tis_data_available(locality))
 		return 0;
 
-	/* read last byte */
-	if (recv_data(buf_ptr, 1) != 1)
+	/* read last byte into its own slot after the bytes already received */
+	if (recv_data(buf_ptr + expected - 1, 1) != 1)
 		return 0;
 
 	/* make sure we read everything */

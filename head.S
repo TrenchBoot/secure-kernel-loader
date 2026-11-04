@@ -48,17 +48,20 @@ GLOBAL(sl_header)
 	.long	0xffffffff       /* Reserved */
 	.long	_end_of_signed + 0x640 /* Total Length including signature and pubkey raw data */
 	.word	soc_flag         /* Offset to SOCFLAG Structure, see below */
-	.word	skl_info         /* Offset to SKL info with UUID and version */
-	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 
 soc_flag:
 	/*
 	 * This structure isn't described in the spec, but it is assumed to be a
 	 * number of entries, followed by family and model of supported CPUs, in
 	 * form of EAX of CPUID leaf 1 with stepping set to 0.
+	 *
+	 * The structure has a fixed size of eight entries: GRUB and boot.h both
+	 * locate skl_info and bootloader_data at offsets 0x42 and 0x44, right
+	 * after it. Family 1Ah model 00h (EPYC 9005) takes the slot of family
+	 * 17h model 60h.
 	 */
 	.long	0x00000008
-	.long	0x00860f00
+	.long	0x00b00f00
 	.long	0x00a50f00
 	.long	0x00a40f00
 	.long	0x00a70f00
@@ -66,6 +69,8 @@ soc_flag:
 	.long	0x00a10f00
 	.long	0x00a80f00
 	.long	0x00aa0f00
+	.word	skl_info         /* Offset to SKL info with UUID and version */
+	.word	bootloader_data  /* Offset to SLRT filled by the bootloader */
 ENDDATA(sl_header)
 
 	.text
@@ -359,7 +364,7 @@ ENDDATA(gdt)
 
 #ifdef __x86_64__
 	/* 64bit Pagetables, identity map of the first 4G of RAM. */
-	.section .bss.page_data, "aw", @nobits
+	.section .bss..page_data, "aw", @nobits
 .align PAGE_SIZE
 
 l1_identmap: /* 1x L1 page, mapping 2M of RAM. */

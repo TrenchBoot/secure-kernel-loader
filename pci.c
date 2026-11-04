@@ -23,6 +23,7 @@
 #include <errno-base.h>
 #include <boot.h>
 #include <pci.h>
+#include <printk.h>
 
 int (*pci_read)(unsigned int seg, unsigned int bus,
                 unsigned int devfn, int reg, int len, u32 *value);
@@ -193,20 +194,41 @@ u32 pci_locate(unsigned int bus, unsigned int devfn)
     return pci_cap_ptr;
 }
 
+/* MSR C001_0058, MMIO configuration space base address (AMD64 APM vol. 2). */
+#define MSR_MMIO_CFG_BASE_ADDR      0xc0010058
+#define MMIO_CFG_BASE_ENABLE        (1ULL << 0)
+#define MMIO_CFG_BASE_BUS_RANGE(v)  (((v) >> 2) & 0xf)
+#define MMIO_CFG_BASE_ADDR_MASK     0x000ffffffff00000ULL   /* bits 51:20 */
+
 void pci_init(void)
 {
     u32 eax, edx;
+    u64 msr, base, size;
 
-    asm volatile("rdmsr" : "=a"(eax), "=d"(edx) : "c"(0xc0010058));
+    asm volatile("rdmsr" : "=a"(eax), "=d"(edx) : "c"(MSR_MMIO_CFG_BASE_ADDR));
+    msr = ((u64)edx << 32) | eax;
 
-    if ( eax & 1 )  /* MMIO configuration space is enabled */
+    base = msr & MMIO_CFG_BASE_ADDR_MASK;
+    /* One 1 MiB segment per bus, 2^BusRange buses. */
+    size = 1ULL << (20 + MMIO_CFG_BASE_BUS_RANGE(msr));
+
+    /*
+     * SKL can address only the first 4 GiB of physical memory: the 32-bit
+     * build runs without paging and the 64-bit build identity-maps 4 GiB.
+     * Use type 1 accesses when the MMIO configuration space lies outside
+     * that range.
+     */
+    if ( (msr & MMIO_CFG_BASE_ENABLE) && base + size <= 0x100000000ULL )
     {
-        mmio_base_addr = (eax & 0xfff00000);
+        mmio_base_addr = (u32)base;
         pci_read = &pci_mmio_read;
         pci_write = &pci_mmio_write;
     }
     else
     {
+        if ( msr & MMIO_CFG_BASE_ENABLE )
+            print("PCI: MMIO configuration space above 4G, using type 1 accesses\n");
+
         pci_read = &pci_conf1_read;
         pci_write = &pci_conf1_write;
     }

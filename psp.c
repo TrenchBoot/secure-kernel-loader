@@ -54,7 +54,8 @@ typedef enum {
     PSP_NONE = 0,
     PSP_V1,
     PSP_V2,
-    PSP_V3
+    PSP_V3,
+    ASP,
 } psp_version_t;
 
 struct pci_psp_device {
@@ -71,7 +72,8 @@ const struct pci_psp_device psp_devs_list[] = {
     {0x1022, 0x15DF, PSP_V3},
     {0x1022, 0x1649, PSP_V2},
     {0x1022, 0x14CA, PSP_V3},
-    {0x1022, 0x15C7, PSP_NONE}
+    {0x1022, 0x15C7, PSP_V3},
+    {0x1022, 0x156E, ASP},
 };
 
 static bool init_drtm_interface(u64 base_addr, psp_version_t psp_version);
@@ -226,6 +228,7 @@ static bool init_drtm_interface(u64 base_addr, psp_version_t psp_version)
     switch(psp_version) {
     case PSP_V3:
     case PSP_V2:
+    case ASP:
         g_psp_drtm.c2pmsg_72 = (volatile u32 *)(u32)(base + 0x10a20);
         g_psp_drtm.c2pmsg_93 = (volatile u32 *)(u32)(base + 0x10a74);
         g_psp_drtm.c2pmsg_94 = (volatile u32 *)(u32)(base + 0x10a78);
@@ -243,9 +246,12 @@ static bool init_drtm_interface(u64 base_addr, psp_version_t psp_version)
     return true;
 }
 
-static bool drtm_wait_for_psp_ready(u32 *status)
+/* 100 ms per retry. Hashing a multi-megabyte DLME takes the PSP seconds. */
+#define DRTM_WAIT_RETRIES         50
+#define DRTM_EXTEND_WAIT_RETRIES  1200
+
+static bool drtm_wait_for_psp_ready_retries(u32 *status, int retry)
 {
-    int retry = 50;
     u32 reg_val = 0;
 
     while (--retry) {
@@ -268,6 +274,11 @@ static bool drtm_wait_for_psp_ready(u32 *status)
     }
 
     return true;
+}
+
+static bool drtm_wait_for_psp_ready(u32 *status)
+{
+    return drtm_wait_for_psp_ready_retries(status, DRTM_WAIT_RETRIES);
 }
 
 #ifndef UINT32_MAX
@@ -310,7 +321,7 @@ bool drtm_extend_ossl_digest(u64 addr, u64 size)
     *g_psp_drtm.c2pmsg_95 = (u32)(reloc_addr >> 32);
 
     *g_psp_drtm.c2pmsg_72 = (DRTM_CMD_EXTEND_OSSL_DIGEST << DRTM_MBOX_CMD_SHIFT);
-    if (!drtm_wait_for_psp_ready(&status)) {
+    if (!drtm_wait_for_psp_ready_retries(&status, DRTM_EXTEND_WAIT_RETRIES)) {
         print("DRTM: drtm_extend_ossl_digest: command failed to complete\n");
         return false;
     }
@@ -389,6 +400,75 @@ bool drtm_get_cap(void)
     print(", c2pmsg_95 = ");
     print_u64(*g_psp_drtm.c2pmsg_95);
     print("\n");
+
+    return true;
+}
+
+/*
+ * One command without arguments, its status and c2pmsg_93 to _95 as the
+ * PSP left them printed, and true on DRTM_NO_ERROR.
+ */
+static bool drtm_command_no_args(const char *name, u32 cmd)
+{
+    u32 status = 0;
+
+    if (!(*g_psp_drtm.c2pmsg_72 & DRTM_MBOX_READY_MASK)) {
+        print("DRTM: ");
+        print(name);
+        print(": PSP not ready\n");
+        return false;
+    }
+
+    *g_psp_drtm.c2pmsg_93 = 0;
+    *g_psp_drtm.c2pmsg_94 = 0;
+    *g_psp_drtm.c2pmsg_95 = 0;
+    *g_psp_drtm.c2pmsg_72 = (cmd << DRTM_MBOX_CMD_SHIFT);
+    if (!drtm_wait_for_psp_ready(&status)) {
+        print("DRTM: ");
+        print(name);
+        print(": command failed to complete\n");
+        return false;
+    }
+
+    print("DRTM: ");
+    print(name);
+    print(": status ");
+    drtm_print_status(status);
+    print(", c2pmsg_93 = ");
+    print_u64(*g_psp_drtm.c2pmsg_93);
+    print(", c2pmsg_94 = ");
+    print_u64(*g_psp_drtm.c2pmsg_94);
+    print(", c2pmsg_95 = ");
+    print_u64(*g_psp_drtm.c2pmsg_95);
+    print("\n");
+
+    return status == 0;
+}
+
+/*
+ * The log of the PSP's extends, as DRTM_CMD_GET_TCG_LOGS names it: the
+ * size in c2pmsg_93, the address in _94 and _95, as
+ * DRTM_CMD_EXTEND_OSSL_DIGEST takes one. The guide places
+ * DRTM_CMD_ALLOCATE_SHARED_MEMORY before the command, so a failed first
+ * attempt is retried once after it.
+ */
+bool drtm_get_tcg_logs(u64 *addr, u64 *size)
+{
+    print("DRTM: drtm_get_tcg_logs: Entering\n");
+
+    if (!drtm_command_no_args("drtm_get_tcg_logs", DRTM_CMD_GET_TCG_LOGS)) {
+        print("DRTM: drtm_get_tcg_logs: retrying after "
+              "DRTM_CMD_ALLOCATE_SHARED_MEMORY\n");
+        drtm_command_no_args("drtm_allocate_shared_memory",
+                             DRTM_CMD_ALLOCATE_SHARED_MEMORY);
+        if (!drtm_command_no_args("drtm_get_tcg_logs",
+                                  DRTM_CMD_GET_TCG_LOGS)) {
+            return false;
+        }
+    }
+
+    *size = *g_psp_drtm.c2pmsg_93;
+    *addr = *g_psp_drtm.c2pmsg_94 | ((u64)*g_psp_drtm.c2pmsg_95 << 32);
 
     return true;
 }
